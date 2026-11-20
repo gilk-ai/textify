@@ -19,6 +19,10 @@ final class TextifyViewModel: ObservableObject {
     @Published var text: String = ""
     @Published var partiallyReadable = false
     @Published var showSettings = false
+    /// File the latest result was auto-saved to (when "Save to file" is on).
+    @Published var savedURL: URL?
+    /// Why auto-save failed, if it did. The clipboard copy still stands.
+    @Published var saveError: String?
 
     private let clipboard = ClipboardManager.shared
     private var lastFingerprint: String?
@@ -72,6 +76,8 @@ final class TextifyViewModel: ObservableObject {
         lastImage = image
         status = .processing
         partiallyReadable = false
+        savedURL = nil
+        saveError = nil
 
         task = Task {
             do {
@@ -87,6 +93,7 @@ final class TextifyViewModel: ObservableObject {
                 text = trimmed
                 partiallyReadable = result.hasLowConfidence
                 copyToClipboard()
+                saveIfEnabled()
             } catch {
                 guard !Task.isCancelled else { return }
                 fail(error)
@@ -106,9 +113,29 @@ final class TextifyViewModel: ObservableObject {
         }
     }
 
+    /// Writes the result to disk when the user opted in. Only called for fresh OCR results,
+    /// so pasting the same image twice doesn't create duplicate files.
+    private func saveIfEnabled() {
+        guard TextFileSaver.isEnabled, hasResult else { return }
+        do {
+            savedURL = try TextFileSaver.save(text)
+            saveError = nil
+        } catch {
+            savedURL = nil
+            saveError = "Copied, but couldn't save file: \(error.localizedDescription)"
+        }
+    }
+
+    func revealSavedFile() {
+        guard let url = savedURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
     func clear() {
         task?.cancel()
         text = ""
+        savedURL = nil
+        saveError = nil
         status = .idle
         partiallyReadable = false
         lastImage = nil

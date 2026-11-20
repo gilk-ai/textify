@@ -123,8 +123,14 @@ struct StatusBar: View {
                 ProgressView().controlSize(.small).tint(Theme.accent)
                 Text("Reading text…").foregroundStyle(Theme.secondary)
             case .copied:
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
-                Text("Copied to clipboard!").foregroundStyle(Theme.accent).fontWeight(.semibold)
+                if let saveError = vm.saveError {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+                    Text(saveError).foregroundStyle(Theme.warning)
+                } else {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
+                    Text(vm.savedURL == nil ? "Copied to clipboard!" : "Copied & saved!")
+                        .foregroundStyle(Theme.accent).fontWeight(.semibold)
+                }
                 if vm.partiallyReadable {
                     Text("· some text may be unclear").foregroundStyle(Theme.warning)
                 }

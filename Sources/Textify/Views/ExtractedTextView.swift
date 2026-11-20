@@ -17,15 +17,20 @@ struct ExtractedTextView: View {
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.surface))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 PillButton(title: "Copy", symbol: "doc.on.doc", primary: true) { vm.copyToClipboard() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
                 PillButton(title: "Clear", symbol: "xmark", primary: false) { vm.clear() }
                 Spacer()
+                if vm.savedURL != nil {
+                    HeaderButton(symbol: "doc.text.magnifyingglass", help: "Show saved file in Finder") { vm.revealSavedFile() }
+                }
                 HeaderButton(symbol: "arrow.clockwise", help: "Re-scan image") { vm.rescan() }
                 Text("\(vm.text.count) chars")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(Theme.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
             }
         }
     }
@@ -51,6 +56,7 @@ struct PillButton: View {
                 )
         }
         .buttonStyle(.plain)
+        .fixedSize()
         .onHover { hovering = $0 }
     }
 }

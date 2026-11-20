@@ -36,6 +36,16 @@ For development: `swift build` (see the SDK note below), then `.build/debug/Text
 
 Text is copied automatically. The panel also has **Copy**, **Clear** and **Re-scan**. **Esc** clears the result, or hides the panel if it's already empty. **⌘W** hides it and **⌘,** opens Settings.
 
+### Save to file (optional)
+
+Turn on **Settings → Save to file** to also write every extraction to disk. It's off by default.
+
+- **New file each time** creates `TEXTIFY 2026-11-20 at 23.41.05.txt` (a name collision gets ` 2`, ` 3`, …).
+- **Append to one file** adds each extraction to `TEXTIFY Log.txt` under a timestamp header.
+- The default folder is `~/Documents/TEXTIFY`. Use **Choose…** to pick another one. The first save into Documents triggers a one-time macOS permission prompt.
+- The status line reads **Copied & saved!**, and the result view gets a Show-in-Finder button. If saving fails, the text is still copied and a warning explains why.
+- Pasting the same image again doesn't create a duplicate file. Re-scan does save again.
+
 Supported formats: PNG, JPEG, HEIC/HEIF, TIFF, BMP and GIF.
 
 ## Hebrew
@@ -55,7 +65,7 @@ When Tesseract is installed, it runs in parallel with Vision and supplies the li
 
 - All OCR runs on your Mac. The app has no networking code.
 - Images are held in memory only and never written to disk. Tesseract receives the image through a stdin pipe.
-- Extracted text is never logged.
+- Extracted text is never logged. It's written to disk only if you turn on *Save to file*.
 - The clipboard is overwritten only after OCR returns non-empty text. If no text is found, the clipboard is left unchanged.
 - An identical image is not re-processed unless you press Re-scan. TEXTIFY just puts the existing text back on the clipboard.
 
@@ -77,6 +87,7 @@ None. The global shortcut uses Carbon `RegisterEventHotKey`, which needs no Acce
 swift scripts/make-test-images.swift build/test-images   # English / Hebrew / mixed / multi-paragraph / blank
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr build/test-images/hebrew.png
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard  # same pipeline as ⌘V, headless
+build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard --save-to build/out [--append]  # also test auto-save
 TEXTIFY_SNAPSHOT_DIR=/tmp/snaps TEXTIFY_SNAPSHOT_IMAGE=build/test-images/mixed.png \
   build/TEXTIFY.app/Contents/MacOS/Textify               # renders each UI state to PNGs
 ```
@@ -91,6 +102,7 @@ Sources/Textify/
   OCRService.swift          Vision OCR + reading-order/paragraph layout
   HebrewOCRService.swift    optional local Tesseract pass for Hebrew
   ClipboardManager.swift    pasteboard image read / text write
+  TextFileSaver.swift       opt-in save of extracted text (new file / append)
   ImageLoader.swift         file/data → CGImage, format checks
   TextifyViewModel.swift    state machine (idle → processing → copied / no text / error)
   Views/                    ContentView, ImageDropZone, ExtractedTextView, SettingsView
