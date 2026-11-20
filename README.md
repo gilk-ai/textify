@@ -1,6 +1,6 @@
 # TEXTIFY
 
-**Pixels in. Text out.** A tiny macOS menu-bar utility: give it a screenshot and the text lands on your clipboard, ready to paste.
+A tiny macOS menu-bar utility: give it a screenshot and the text lands on your clipboard, ready to paste.
 
 Screenshot → ⌘V into TEXTIFY → on-device OCR → clipboard updated → paste anywhere.
 
@@ -29,10 +29,14 @@ For development: `swift build` (see the SDK note below), then `.build/debug/Text
 
 | Input | How |
 |---|---|
-| Paste | Take a screenshot to the clipboard (⌃⇧⌘4, or copy an image in a browser or Finder), focus TEXTIFY, press **⌘V** |
+| Paste | Take a screenshot to the clipboard (⌃⇧⌘4, or copy an image in a browser or Finder), **click the TEXTIFY panel**, press **⌘V**. You can also click the ⌘V hint |
 | Drag & drop | Drop an image file or a screenshot thumbnail onto the panel |
 | Pick a file | Click the drop zone |
 | Global shortcut | **⌘⇧V** from any app shows TEXTIFY and processes the clipboard image (change or disable it in Settings) |
+
+> **Why click first?** The panel floats above other apps, but ⌘V only reaches TEXTIFY while the panel has keyboard focus. Otherwise it goes to the app you were using. The hint reads **"Click here, then press ⌘V"** when the panel isn't focused and turns green ("Press ⌘V") when it is. The click that focuses the panel doesn't open the file picker. To skip the click entirely, use the global shortcut **⌘⇧V**.
+>
+> Tip: **⌘⇧4** saves screenshots to the Desktop. Add **⌃** (⌃⇧⌘4) to copy them to the clipboard instead.
 
 Text is copied automatically. The panel also has **Copy**, **Clear** and **Re-scan**. **Esc** clears the result, or hides the panel if it's already empty. **⌘W** hides it and **⌘,** opens Settings.
 
@@ -40,8 +44,9 @@ Text is copied automatically. The panel also has **Copy**, **Clear** and **Re-sc
 
 Turn on **Settings → Save to file** to also write every extraction to disk. It's off by default.
 
-- **New file each time** creates `TEXTIFY 2026-11-20 at 23.41.05.txt` (a name collision gets ` 2`, ` 3`, …).
-- **Append to one file** adds each extraction to `TEXTIFY Log.txt` under a timestamp header.
+- **New file each time** creates `TEXTIFY 2026-11-20 at 23.41.05 - Acme Invoice Due December.txt` (a name collision gets ` 2`, ` 3`, …).
+- **Append to one file** adds each extraction to `TEXTIFY Log.txt` under a header with the timestamp and label.
+- **Labels** are short, memorable titles generated on your Mac. On macOS 26+ with Apple Intelligence, Apple's on-device language model writes them. Otherwise, or if the model takes longer than 4 s, a local keyword heuristic is used. Hebrew text gets an English title from the model, or its first words from the heuristic. The clipboard copy happens immediately; only the file waits for the label (usually under 1 s).
 - The default folder is `~/Documents/TEXTIFY`. Use **Choose…** to pick another one. The first save into Documents triggers a one-time macOS permission prompt.
 - The status line reads **Copied & saved!**, and the result view gets a Show-in-Finder button. If saving fails, the text is still copied and a warning explains why.
 - Pasting the same image again doesn't create a duplicate file. Re-scan does save again.
@@ -79,6 +84,7 @@ None. The global shortcut uses Carbon `RegisterEventHotKey`, which needs no Acce
 - **SDK note:** the macOS 27 SDK in Command Line Tools ships SwiftUI macros (`@State`) without their compiler plugin, so `build-app.sh` builds against the macOS 26 SDK when Xcode isn't installed. For a manual build, use `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk swift build`. With Xcode installed, plain `swift build` works.
 - The app is ad-hoc signed. That's fine on the Mac that built it. Copying it to another Mac would require right-click → Open, or a Developer ID signature and notarization.
 - "Launch at login" works best once the app is in /Applications.
+- **"No text found" on an image that clearly has text:** macOS caches compiled OCR models per app, and that cache can get corrupted. TEXTIFY automatically retries with Vision's fast model, so you'll get the text, flagged "some text may be unclear". To fix the cache itself, quit TEXTIFY and delete `~/Library/Caches/com.textify.app`; macOS rebuilds it on the next use.
 - Tesseract's very first run can take some time while it loads its model. After that, it adds about 0.1 s per image.
 
 ## Testing helpers
@@ -88,6 +94,7 @@ swift scripts/make-test-images.swift build/test-images   # English / Hebrew / mi
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr build/test-images/hebrew.png
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard  # same pipeline as ⌘V, headless
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard --save-to build/out [--append]  # also test auto-save
+build/TEXTIFY.app/Contents/MacOS/Textify --label build/test-images/invoice.png             # show the file label
 TEXTIFY_SNAPSHOT_DIR=/tmp/snaps TEXTIFY_SNAPSHOT_IMAGE=build/test-images/mixed.png \
   build/TEXTIFY.app/Contents/MacOS/Textify               # renders each UI state to PNGs
 ```
@@ -103,6 +110,7 @@ Sources/Textify/
   HebrewOCRService.swift    optional local Tesseract pass for Hebrew
   ClipboardManager.swift    pasteboard image read / text write
   TextFileSaver.swift       opt-in save of extracted text (new file / append)
+  FileLabeler.swift         on-device label for saved files (Apple model → heuristic)
   ImageLoader.swift         file/data → CGImage, format checks
   TextifyViewModel.swift    state machine (idle → processing → copied / no text / error)
   Views/                    ContentView, ImageDropZone, ExtractedTextView, SettingsView

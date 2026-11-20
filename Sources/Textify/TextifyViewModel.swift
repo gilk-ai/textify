@@ -23,6 +23,17 @@ final class TextifyViewModel: ObservableObject {
     @Published var savedURL: URL?
     /// Why auto-save failed, if it did. The clipboard copy still stands.
     @Published var saveError: String?
+    /// Whether the panel has keyboard focus (⌘V only reaches TEXTIFY when it does).
+    @Published var panelIsKey = false
+    private var becameKeyAt = Date.distantPast
+
+    func panelFocusChanged(isKey: Bool) {
+        panelIsKey = isKey
+        if isKey { becameKeyAt = Date() }
+    }
+
+    /// True right after a click brought the panel into focus — used to swallow that "focus click".
+    var panelJustBecameKey: Bool { Date().timeIntervalSince(becameKeyAt) < 0.5 }
 
     private let clipboard = ClipboardManager.shared
     private var lastFingerprint: String?
@@ -93,7 +104,7 @@ final class TextifyViewModel: ObservableObject {
                 text = trimmed
                 partiallyReadable = result.hasLowConfidence
                 copyToClipboard()
-                saveIfEnabled()
+                await saveIfEnabled()
             } catch {
                 guard !Task.isCancelled else { return }
                 fail(error)
@@ -115,10 +126,14 @@ final class TextifyViewModel: ObservableObject {
 
     /// Writes the result to disk when the user opted in. Only called for fresh OCR results,
     /// so pasting the same image twice doesn't create duplicate files.
-    private func saveIfEnabled() {
+    /// The clipboard is already updated before this runs; labeling only delays the file.
+    private func saveIfEnabled() async {
         guard TextFileSaver.isEnabled, hasResult else { return }
+        let captured = text
+        let label = await FileLabeler.label(for: captured)
+        guard !Task.isCancelled, text == captured else { return } // a newer result replaced this one
         do {
-            savedURL = try TextFileSaver.save(text)
+            savedURL = try TextFileSaver.save(captured, label: label)
             saveError = nil
         } catch {
             savedURL = nil

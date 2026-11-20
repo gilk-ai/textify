@@ -32,6 +32,14 @@ final class FloatingPanelManager: NSObject, NSWindowDelegate {
         if let panel, panel.isVisible, panel.isKeyWindow { hide() } else { show() }
     }
 
+    func windowDidBecomeKey(_ notification: Notification) {
+        TextifyViewModel.shared.panelFocusChanged(isKey: true)
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        TextifyViewModel.shared.panelFocusChanged(isKey: false)
+    }
+
     private func makePanel() -> TextifyPanel {
         let panel = TextifyPanel(
             contentRect: NSRect(origin: .zero, size: Self.size),

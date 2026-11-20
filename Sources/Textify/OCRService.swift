@@ -38,19 +38,6 @@ enum OCRService {
     }
 
     static func recognizeSync(_ image: CGImage) throws -> OCRResult {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
-
-        // Only ask for languages this OS revision supports; otherwise let Vision auto-detect.
-        let supported = (try? request.supportedRecognitionLanguages()) ?? []
-        let langs = preferredLanguages.filter { supported.contains($0) }
-        if langs.isEmpty {
-            request.automaticallyDetectsLanguage = true
-        } else {
-            request.recognitionLanguages = langs
-        }
-
         // Hebrew pass (Tesseract) runs in parallel with Vision when available.
         var hebrew: [Fragment] = []
         let group = DispatchGroup()
@@ -60,18 +47,27 @@ enum OCRService {
             }
         }
 
-        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        var observations: [VNRecognizedTextObservation] = []
+        var usedFallback = false
         do {
-            try handler.perform([request])
+            observations = try runVision(image, level: .accurate)
+            // Self-heal: macOS caches compiled Vision models per app, and a corrupted cache can make
+            // the accurate model silently return nothing. The fast model is separate, so retry with it.
+            if observations.isEmpty {
+                observations = try runVision(image, level: .fast)
+                usedFallback = !observations.isEmpty
+            }
         } catch {
             group.wait()
-            if hebrew.isEmpty { throw OCRError.visionFailed(error.localizedDescription) }
+            if hebrew.isEmpty { throw error }
         }
         group.wait()
 
-        let observations = request.results ?? []
+        if ProcessInfo.processInfo.environment["TEXTIFY_DEBUG"] != nil { // counts only, never text
+            fputs("[debug] obs=\(observations.count) fastFallback=\(usedFallback) hebrew=\(hebrew.count) size=\(image.width)x\(image.height)\n", stderr)
+        }
         var fragments: [Fragment] = []
-        var lowConfidence = false
+        var lowConfidence = usedFallback // fast-model results are rougher; flag them
         for obs in observations {
             guard let candidate = obs.topCandidates(1).first else { continue }
             let s = candidate.string.trimmingCharacters(in: .whitespaces)
@@ -87,6 +83,28 @@ enum OCRService {
         }
 
         return OCRResult(text: TextLayout.assemble(fragments), hasLowConfidence: lowConfidence)
+    }
+
+    private static func runVision(_ image: CGImage, level: VNRequestTextRecognitionLevel) throws -> [VNRecognizedTextObservation] {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = level
+        request.usesLanguageCorrection = true
+
+        // Only ask for languages this OS revision supports; otherwise let Vision auto-detect.
+        let supported = (try? request.supportedRecognitionLanguages()) ?? []
+        let langs = preferredLanguages.filter { supported.contains($0) }
+        if langs.isEmpty {
+            request.automaticallyDetectsLanguage = true
+        } else {
+            request.recognitionLanguages = langs
+        }
+
+        do {
+            try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+        } catch {
+            throw OCRError.visionFailed(error.localizedDescription)
+        }
+        return request.results ?? []
     }
 }
 

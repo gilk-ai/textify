@@ -14,6 +14,5 @@
     <key>LSUIElement</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSHumanReadableCopyright</key><string>Pixels in. Text out.</string>
 </dict>
 </plist>

@@ -42,15 +42,10 @@ struct ContentView: View {
             Image(systemName: "text.viewfinder")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.accent)
-            VStack(alignment: .leading, spacing: 0) {
-                Text("TEXTIFY")
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
-                    .tracking(2.5)
-                    .foregroundStyle(Theme.text)
-                Text("Pixels in. Text out.")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Theme.secondary)
-            }
+            Text("TEXTIFY")
+                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                .tracking(2.5)
+                .foregroundStyle(Theme.text)
             Spacer()
             HeaderButton(symbol: vm.showSettings ? "xmark" : "gearshape", help: "Settings (⌘,)") {
                 vm.showSettings.toggle()

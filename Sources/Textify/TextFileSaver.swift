@@ -40,19 +40,25 @@ enum TextFileSaver {
 
     /// Writes `text` according to the current settings. Returns the file written to.
     @discardableResult
-    static func save(_ text: String, to folder: URL = folder, mode: Mode = mode, date: Date = Date()) throws -> URL {
+    static func save(_ text: String, label: String? = nil, to folder: URL = folder, mode: Mode = mode,
+                     date: Date = Date()) throws -> URL {
+        let label = label.flatMap(FileLabeler.sanitize)
         let fm = FileManager.default
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
 
         switch mode {
         case .newFile:
-            let url = uniqueURL(in: folder, base: "TEXTIFY \(stamp(date, "yyyy-MM-dd 'at' HH.mm.ss"))")
+            var base = "TEXTIFY \(stamp(date, "yyyy-MM-dd 'at' HH.mm.ss"))"
+            if let label { base += " - \(label)" }
+            let url = uniqueURL(in: folder, base: base)
             try (text + "\n").write(to: url, atomically: true, encoding: .utf8)
             return url
 
         case .append:
             let url = folder.appendingPathComponent(appendFileName)
-            let entry = "── \(stamp(date, "yyyy-MM-dd HH:mm:ss")) ──\n\(text)\n\n"
+            // One shared file, so the label goes into each entry's header instead of the file name.
+            let header = [stamp(date, "yyyy-MM-dd HH:mm:ss"), label].compactMap { $0 }.joined(separator: " · ")
+            let entry = "── \(header) ──\n\(text)\n\n"
             if fm.fileExists(atPath: url.path) {
                 let handle = try FileHandle(forWritingTo: url)
                 defer { try? handle.close() }

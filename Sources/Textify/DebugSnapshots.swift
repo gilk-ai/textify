@@ -6,11 +6,16 @@ import AppKit
 enum DebugSnapshots {
     static func runIfRequested() {
         let env = ProcessInfo.processInfo.environment
+        if env["TEXTIFY_TEST_CMDV"] != nil { testCommandV(); return }
         guard let dir = env["TEXTIFY_SNAPSHOT_DIR"] else { return }
         let vm = TextifyViewModel.shared
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(600))
             snap(dir, "1-idle")
+            vm.panelFocusChanged(isKey: false)
+            try? await Task.sleep(for: .milliseconds(300))
+            snap(dir, "1b-idle-unfocused")
+            vm.panelFocusChanged(isKey: true)
             if let img = env["TEXTIFY_SNAPSHOT_IMAGE"] {
                 vm.process(url: URL(fileURLWithPath: img))
                 try? await Task.sleep(for: .milliseconds(80))
@@ -24,6 +29,24 @@ enum DebugSnapshots {
             vm.status = .idle; vm.showSettings = true
             try? await Task.sleep(for: .milliseconds(300)); snap(dir, "5-settings")
             NSApp.terminate(nil)
+        }
+    }
+
+    /// Posts a synthetic ⌘V to the panel and reports what the view model did.
+    private static func testCommandV() {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard let panel = NSApp.windows.first(where: { $0 is TextifyPanel }) else { print("no panel"); exit(1) }
+            print("panel isKey:", panel.isKeyWindow, "app active:", NSApp.isActive)
+            let ev = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+                                      timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber,
+                                      context: nil, characters: "v", charactersIgnoringModifiers: "v",
+                                      isARepeat: false, keyCode: 9)!
+            NSApp.postEvent(ev, atStart: false)
+            try? await Task.sleep(for: .milliseconds(200))
+            while TextifyViewModel.shared.status == .processing { try? await Task.sleep(for: .milliseconds(100)) }
+            print("status after ⌘V:", TextifyViewModel.shared.status)
+            exit(0)
         }
     }
 
