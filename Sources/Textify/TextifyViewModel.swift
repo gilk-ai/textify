@@ -1,0 +1,146 @@
+import AppKit
+import SwiftUI
+
+/// Single source of truth for the panel UI.
+@MainActor
+final class TextifyViewModel: ObservableObject {
+    static let shared = TextifyViewModel()
+
+    enum Status: Equatable {
+        case idle
+        case processing
+        case copied            // text extracted and on the clipboard
+        case copyFailed(String) // text extracted but clipboard write failed
+        case noText
+        case error(String)
+    }
+
+    @Published var status: Status = .idle
+    @Published var text: String = ""
+    @Published var partiallyReadable = false
+    @Published var showSettings = false
+
+    private let clipboard = ClipboardManager.shared
+    private var lastFingerprint: String?
+    private var lastImage: CGImage?
+    private var task: Task<Void, Never>?
+
+    var hasResult: Bool { !text.isEmpty }
+
+    // MARK: - Inputs
+
+    /// ⌘V / global hotkey / menu: process the image currently on the clipboard.
+    func processClipboard() {
+        do {
+            let image = try clipboard.readImage()
+            process(image)
+        } catch ClipboardError.noImage where clipboard.clipboardIsOurOwnText && hasResult {
+            // The clipboard holds the text we just extracted — nothing new to do.
+            status = .copied
+        } catch {
+            fail(error)
+        }
+    }
+
+    func process(url: URL) {
+        do { process(try ImageLoader.load(url: url)) } catch { fail(error) }
+    }
+
+    func process(data: Data) {
+        do { process(try ImageLoader.load(data: data)) } catch { fail(error) }
+    }
+
+    /// Re-run OCR on the last image even if it was already processed.
+    func rescan() {
+        guard let img = lastImage else { return }
+        process(img, force: true)
+    }
+
+    // MARK: - Core pipeline
+
+    func process(_ image: CGImage, force: Bool = false) {
+        let fp = ImageLoader.fingerprint(image)
+
+        // Same image again: don't re-run OCR, just make sure the text is back on the clipboard.
+        if !force, fp == lastFingerprint, hasResult {
+            copyToClipboard()
+            return
+        }
+
+        task?.cancel()
+        lastFingerprint = fp
+        lastImage = image
+        status = .processing
+        partiallyReadable = false
+
+        task = Task {
+            do {
+                let result = try await OCRService.recognizeText(in: image)
+                guard !Task.isCancelled else { return }
+                let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    // Leave the clipboard untouched.
+                    text = ""
+                    status = .noText
+                    return
+                }
+                text = trimmed
+                partiallyReadable = result.hasLowConfidence
+                copyToClipboard()
+            } catch {
+                guard !Task.isCancelled else { return }
+                fail(error)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    func copyToClipboard() {
+        guard hasResult else { return }
+        do {
+            try clipboard.writeText(text)
+            status = .copied
+        } catch {
+            status = .copyFailed(error.localizedDescription)
+        }
+    }
+
+    func clear() {
+        task?.cancel()
+        text = ""
+        status = .idle
+        partiallyReadable = false
+        lastImage = nil
+        lastFingerprint = nil
+    }
+
+    /// Escape: close settings, else clear the result, else hide the panel.
+    func handleEscape() {
+        if showSettings {
+            showSettings = false
+        } else if status != .idle || hasResult {
+            clear()
+        } else {
+            FloatingPanelManager.shared.hide()
+        }
+    }
+
+    func openImageFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = ImageLoader.supportedTypes
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose a screenshot or image"
+        panel.level = .modalPanel
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            process(url: url)
+        }
+        FloatingPanelManager.shared.show()
+    }
+
+    private func fail(_ error: Error) {
+        status = .error(error.localizedDescription)
+    }
+}

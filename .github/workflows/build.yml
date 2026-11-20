@@ -1,0 +1,18 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build -c release
+      - name: OCR smoke test
+        run: |
+          swift scripts/make-test-images.swift build/test-images
+          "$(swift build -c release --show-bin-path)/Textify" --ocr build/test-images/english.png | grep -q "quick brown fox"
