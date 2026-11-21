@@ -38,7 +38,7 @@ For development: `swift build` (see the SDK note below), then `.build/debug/Text
 >
 > Tip: **⌘⇧4** saves screenshots to the Desktop. Add **⌃** (⌃⇧⌘4) to copy them to the clipboard instead.
 
-Text is copied automatically. **Tables paste as cells:** when the screenshot contains a table (macOS 26+), the clipboard also carries it as an HTML table and as tab-separated values. Pasting into Excel, Numbers, Google Sheets, Mail or Docs creates a real table, while plain-text apps get the regular text. This upgrade only happens if the clipboard still holds TEXTIFY's text, so anything you've copied since is never overwritten.
+**Tables paste as cells:** when the screenshot contains a table (macOS 26+), the clipboard also carries it as an HTML table and as tab-separated values. Pasting into Excel, Numbers, Google Sheets, Mail or Docs creates a real table, while plain-text apps get the regular text. This upgrade only happens if the clipboard still holds TEXTIFY's text, so anything you've copied since is never overwritten.
 
 Text is copied automatically. The panel also has **Copy**, **Clear** and **Re-scan**. **Esc** clears the result, or hides the panel if it's already empty. **⌘W** hides it and **⌘,** opens Settings.
 
