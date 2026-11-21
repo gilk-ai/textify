@@ -42,6 +42,25 @@ else
   skipped "table detection" "needs macOS 26+"
 fi
 
+echo "Smart detection"
+check "QR link decoded"          '$B --detect $IMG/qr-link.png | grep -q "copy: https://example.com/textify?ref=poster"'
+check "Wi-Fi QR → password"      '$B --detect $IMG/qr-wifi.png | grep -q "copy: latte;2026"'
+check "English event found"      '$B --detect $IMG/event.png | grep -q "^Event:"'
+check "receipt total + VAT"      '$B --detect $IMG/receipt.png | grep -q "Receipt: BLUE BOTTLE COFFEE | \$10.60 · VAT \$0.85"'
+check "receipt isn't an event"   '! $B --detect $IMG/receipt.png | grep -q "^Event:"'
+for f in table-grid recipe mixed event english; do
+  check "no false receipt: $f"   "! \$B --detect \$IMG/$f.png | grep -q '^Receipt:'"
+done
+if (( HAS_HEBREW )); then
+  check "Hebrew event"           '$B --detect $IMG/event-hebrew.png | grep -q "Event: פגישת צוות"'
+  check "Hebrew receipt ₪ + VAT" '$B --detect $IMG/receipt-hebrew.png | grep -q "Receipt: קפה לנדוור | ₪32.00 · VAT ₪4.88"'
+fi
+LEDGER=$(mktemp -d)
+TEXTIFY_SAVE_DIR=$LEDGER $B --detect $IMG/receipt.png --log >/dev/null
+check "ledger skips duplicates"  'TEXTIFY_SAVE_DIR=$LEDGER $B --detect $IMG/receipt.png --log | grep -q "Already in" && [[ $(wc -l < $LEDGER/Expenses.csv) -eq 2 ]]'
+rm -rf "$LEDGER"
+check "valid .ics"               '$B --detect $IMG/event.png --ics build/test.ics && grep -q "^DTSTART:.*Z" build/test.ics && grep -q "END:VCALENDAR" build/test.ics'
+
 echo "Clipboard"
 setclip() { osascript -e "set the clipboard to (read (POSIX file \"$PWD/$1\") as «class PNGf»)"; }
 saved_clip=$(mktemp); pbpaste > "$saved_clip" 2>/dev/null
@@ -49,6 +68,8 @@ setclip $IMG/english.png;  $B --ocr-clipboard --no-save >/dev/null
 check "image → text on clipboard" 'pbpaste | grep -q "quick brown fox"'
 setclip $IMG/blank.png;    $B --ocr-clipboard --no-save >/dev/null 2>&1
 check "no text → clipboard untouched" 'osascript -e "clipboard info" | grep -q PNGf'
+setclip $IMG/qr-link.png;  $B --ocr-clipboard --no-save >/dev/null
+check "QR code → link on clipboard" '[[ "$(pbpaste)" == "https://example.com/textify?ref=poster" ]]'
 if (( HAS_TABLES )); then
   setclip $IMG/table-grid.png; $B --ocr-clipboard --no-save >/dev/null
   check "table → tab-separated cells" 'osascript -l JavaScript -e "ObjC.import(\"AppKit\"); \$.NSPasteboard.generalPasteboard.stringForType(\"public.utf8-tab-separated-values-text\").js" | grep -q "Laptop Pro	North"'

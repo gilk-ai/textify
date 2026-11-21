@@ -13,6 +13,9 @@ struct SettingsView: View {
     @State private var saveFolder = TextFileSaver.folder
     @State private var saveMode = TextFileSaver.mode
     @State private var saveTables = TableExtractor.isEnabled
+    @State private var qrCopy = BarcodeDetector.copyCodeContent
+    @State private var detectEvents = EventDetector.isEnabled
+    @State private var logReceipts = ExpenseLedger.isEnabled
 
     var body: some View {
         ScrollView(showsIndicators: false) { settingsContent }
@@ -91,6 +94,21 @@ struct SettingsView: View {
                 }
             }
 
+            section("Smart detection") {
+                smartToggle("Copy QR code content instead of text", $qrCopy,
+                            "Links, Wi-Fi passwords and other QR content go straight to the clipboard when the code is the main thing in the screenshot.") {
+                    BarcodeDetector.copyCodeContent = $0
+                }
+                smartToggle("Suggest calendar events", $detectEvents,
+                            "A future date with a time shows an Add to Calendar button. Nothing is added without your click.") {
+                    EventDetector.isEnabled = $0
+                }
+                smartToggle("Log receipts to \(ExpenseLedger.fileName)", $logReceipts,
+                            "When Save to file is on, receipts are added automatically (date, vendor, total, VAT) in the save folder. Otherwise use the Log expense button on the receipt card.") {
+                    ExpenseLedger.isEnabled = $0
+                }
+            }
+
             section("Hebrew text") {
                 if hebrewAvailable {
                     Toggle("Read Hebrew (local Tesseract engine)", isOn: $hebrewEnabled)
@@ -137,6 +155,19 @@ struct SettingsView: View {
             Text(key).font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(Theme.accent).frame(width: 34, alignment: .leading)
             Text(desc).foregroundStyle(Theme.secondary).font(.system(size: 11))
+        }
+    }
+
+    private func smartToggle(_ title: String, _ binding: Binding<Bool>, _ caption: String,
+                             onChange: @escaping (Bool) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Toggle(title, isOn: binding)
+                .toggleStyle(.switch)
+                .tint(Theme.accent)
+                .onChange(of: binding.wrappedValue) { _, on in onChange(on) }
+            Text(caption)
+                .font(.system(size: 10)).foregroundStyle(Theme.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

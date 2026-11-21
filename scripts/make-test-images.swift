@@ -1,5 +1,6 @@
 // Renders sample images for testing OCR: swift scripts/make-test-images.swift <outdir>
 import AppKit
+import CoreImage
 
 let out = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "test-images")
 try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
@@ -88,4 +89,38 @@ do {
         .write(to: out.appendingPathComponent("table-merged.png"))
     print("wrote table-merged.png")
 }
+// QR codes (generated with Core Image) with a caption, like a poster or a café sign.
+func renderQR(_ name: String, payload: String, caption: String) {
+    let filter = CIFilter(name: "CIQRCodeGenerator")!
+    filter.setValue(Data(payload.utf8), forKey: "inputMessage")
+    let qr = filter.outputImage!.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+    let rep = NSCIImageRep(ciImage: qr)
+    let qrImage = NSImage(size: rep.size); qrImage.addRepresentation(rep)
+    let size = NSSize(width: 600, height: rep.size.height + 140)
+    let img = NSImage(size: size); img.lockFocus()
+    NSColor.white.setFill(); NSRect(origin: .zero, size: size).fill()
+    qrImage.draw(in: NSRect(x: (size.width - rep.size.width) / 2, y: 100, width: rep.size.width, height: rep.size.height))
+    let style = NSMutableParagraphStyle(); style.alignment = .center
+    NSAttributedString(string: caption, attributes: [.font: NSFont.boldSystemFont(ofSize: 26), .paragraphStyle: style])
+        .draw(in: NSRect(x: 0, y: 40, width: size.width, height: 40))
+    img.unlockFocus()
+    try! NSBitmapImageRep(data: img.tiffRepresentation!)!.representation(using: .png, properties: [:])!
+        .write(to: out.appendingPathComponent(name))
+    print("wrote \(name)")
+}
+renderQR("qr-link.png", payload: "https://example.com/textify?ref=poster", caption: "Scan to see the menu")
+renderQR("qr-wifi.png", payload: "WIFI:T:WPA;S:Cafe Guest;P:latte\\;2026;;", caption: "Free Wi-Fi")
+
+// Events dated 10 days from today, so they're always in the future.
+let eventDay = Calendar.current.date(byAdding: .day, value: 10, to: Date())!
+let en = DateFormatter(); en.locale = Locale(identifier: "en_US"); en.dateFormat = "EEEE, MMMM d, yyyy"
+let he = DateFormatter(); he.dateFormat = "d.M.yyyy"
+render("event.png", ["Hi all,", "Team sync on \(en.string(from: eventDay)) at 3:00 PM in Room 4B.", "Please bring the Q1 numbers."])
+render("event-hebrew.png", ["היי לכולם,", "פגישת צוות ב-\(he.string(from: eventDay)) בשעה 19:30", "נא להביא מחשבים."], rtl: true)
+
+// Receipts.
+render("receipt.png", ["BLUE BOTTLE COFFEE", "66 Mint St, San Francisco", "Date: 05 Nov 2026 14:32", "Latte 5.50", "Croissant 4.25",
+                       "Subtotal 9.75", "Tax 0.85", "Total $10.60", "Thank you!"], size: NSSize(width: 700, height: 560))
+render("receipt-hebrew.png", ["קפה לנדוור", "תאריך: 05/11/2026", "הפוך 18.00", "מאפה 14.00", "סה\"כ לפני מע\"מ 27.12",
+                              "מע\"מ 18% 4.88", "סה\"כ לתשלום ₪32.00", "תודה ולהתראות"], rtl: true, size: NSSize(width: 700, height: 600))
 render("blank.png", [], blank: true)

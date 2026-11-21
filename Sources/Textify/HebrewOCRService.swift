@@ -104,6 +104,16 @@ enum HebrewOCRService {
         }
     }
 
+    /// Fraction of letters that are Hebrew (0…1).
+    static func hebrewShare(_ s: String) -> Double {
+        var hebrew = 0, letters = 0
+        for scalar in s.unicodeScalars where CharacterSet.letters.contains(scalar) {
+            letters += 1
+            if (0x0590...0x05FF).contains(scalar.value) || (0xFB1D...0xFB4F).contains(scalar.value) { hebrew += 1 }
+        }
+        return letters == 0 ? 0 : Double(hebrew) / Double(letters)
+    }
+
     static func containsHebrew(_ s: String) -> Bool {
         s.unicodeScalars.contains { (0x0590...0x05FF).contains($0.value) || (0xFB1D...0xFB4F).contains($0.value) }
     }

@@ -7,6 +7,7 @@ import ServiceManagement
 ///   Textify --label <image>    print the auto-save label for an image's text
 ///   Textify --table <image> [--xlsx out.xlsx]   print detected tables, optionally export them
 ///       [--save-to <dir> [--append]] | [--no-save]   override the Settings save choice
+///   Textify --detect <image> [--ics out.ics] [--log]   print QR codes, events and receipt found in an image
 ///   Textify --login-item on|off|status   manage "Launch at login" for this app bundle  also save the text, overriding the Settings choice
 enum CommandLineTools {
     static func runIfRequested() -> Bool {
@@ -51,6 +52,37 @@ enum CommandLineTools {
                 fputs("Error: \(error.localizedDescription)\n", stderr); exit(1)
             }
         }
+        if let i = args.firstIndex(of: "--detect"), i + 1 < args.count {
+            do {
+                let image = try ImageLoader.load(url: URL(fileURLWithPath: args[i + 1]))
+                let text = try OCRService.recognizeSync(image).text
+                let codes = BarcodeDetector.detectSync(image)
+                for c in codes {
+                    print("QR: \(c.title) | copy: \(c.copyValue) | area \(String(format: "%.3f", c.areaFraction)) | copies code: \(BarcodeDetector.shouldCopyCode(c, ocrText: text))")
+                }
+                let events = blocking { await EventDetector.detect(in: text) }
+                for e in events {
+                    print("Event: \(e.title) | \(e.whenText)\(e.location.map { " | " + $0 } ?? "")")
+                }
+                if let j = args.firstIndex(of: "--ics"), j + 1 < args.count, let first = events.first {
+                    try EventDetector.ics(for: first).write(toFile: args[j + 1], atomically: true, encoding: .utf8)
+                    print("Wrote \(args[j + 1])")
+                }
+                if let r = ReceiptParser.parse(text) {
+                    print("Receipt: \(r.vendor) | \(r.summary)")
+                    if args.contains("--log") {
+                        // Respects TEXTIFY_SAVE_DIR, so tests can log into a scratch folder.
+                        switch try ExpenseLedger.log(r) {
+                        case .added(let url): print("Logged to \(url.path)")
+                        case .duplicate(let url): print("Already in \(url.path)")
+                        }
+                    }
+                }
+                exit(0)
+            } catch {
+                fputs("Error: \(error.localizedDescription)\n", stderr); exit(1)
+            }
+        }
         if let i = args.firstIndex(of: "--table"), i + 1 < args.count {
             do {
                 let image = try ImageLoader.load(url: URL(fileURLWithPath: args[i + 1]))
@@ -80,7 +112,14 @@ enum CommandLineTools {
                 let image = try ClipboardManager.shared.readImage()
                 let result = try OCRService.recognizeSync(image)
                 let text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if text.isEmpty { fputs("No text found. Clipboard unchanged.\n", stderr); exit(2) }
+                let codes = BarcodeDetector.detectSync(image)
+                if text.isEmpty && codes.isEmpty { fputs("No text found. Clipboard unchanged.\n", stderr); exit(2) }
+                // Same rule as the app: a prominent QR code's content wins over the text.
+                if let code = codes.first, BarcodeDetector.shouldCopyCode(code, ocrText: text) {
+                    try ClipboardManager.shared.writeText(code.copyValue)
+                    print("Copied QR content to clipboard.")
+                    exit(0)
+                }
                 try ClipboardManager.shared.writeText(text)
                 print("Copied \(text.count) characters to clipboard.")
                 // Same enrichment as the app: tables also go on the clipboard as cells.

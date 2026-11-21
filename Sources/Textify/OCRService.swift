@@ -67,21 +67,29 @@ enum OCRService {
             fputs("[debug] obs=\(observations.count) fastFallback=\(usedFallback) hebrew=\(hebrew.count) size=\(image.width)x\(image.height)\n", stderr)
         }
         var fragments: [Fragment] = []
-        var lowConfidence = usedFallback // fast-model results are rougher; flag them
         for obs in observations {
             guard let candidate = obs.topCandidates(1).first else { continue }
             let s = candidate.string.trimmingCharacters(in: .whitespaces)
             guard !s.isEmpty else { continue }
-            if candidate.confidence < lowConfidenceThreshold { lowConfidence = true }
-            fragments.append(Fragment(text: s, box: obs.boundingBox))
+            // Fast-model results are rougher: cap their confidence so they're flagged (and so a
+            // Hebrew line from Tesseract replaces them).
+            let confidence = usedFallback ? min(candidate.confidence, lowConfidenceThreshold / 2) : candidate.confidence
+            fragments.append(Fragment(text: s, box: obs.boundingBox, confidence: confidence))
         }
 
-        if !hebrew.isEmpty {
-            // Vision can't read Hebrew; drop whatever it guessed for those lines and use Tesseract's.
-            fragments.removeAll { frag in hebrew.contains { TextLayout.overlapsVertically(frag.box, $0.box) && frag.box.intersects($0.box) } }
-            fragments += hebrew
+        // Vision can't read Hebrew, so Tesseract's version wins for genuinely Hebrew lines.
+        // Tesseract sometimes "sees" a couple of Hebrew letters in an English line (e.g. "Hi" → "וה"),
+        // so a line only counts as Hebrew if Hebrew is a real share of it, or Vision wasn't confident there.
+        for line in hebrew {
+            let overlapping = fragments.filter { TextLayout.overlapsVertically($0.box, line.box) && $0.box.intersects(line.box) }
+            let visionConfident = !overlapping.isEmpty && overlapping.allSatisfy { $0.confidence >= 0.5 }
+            guard HebrewOCRService.hebrewShare(line.text) >= 0.5 || !visionConfident else { continue }
+            fragments.removeAll { f in overlapping.contains { $0.box == f.box && $0.text == f.text } }
+            fragments.append(line)
         }
 
+        // Judge readability on what actually made it into the result.
+        let lowConfidence = fragments.contains { $0.confidence < lowConfidenceThreshold }
         return OCRResult(text: TextLayout.assemble(fragments), hasLowConfidence: lowConfidence)
     }
 
@@ -112,6 +120,8 @@ enum OCRService {
 struct Fragment {
     let text: String
     let box: CGRect
+    /// Recognition confidence (0…1). Tesseract fragments use 1.
+    var confidence: Float = 1
 }
 
 /// Turns unordered Vision fragments into reading-order text with line and paragraph breaks.

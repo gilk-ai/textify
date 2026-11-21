@@ -7,6 +7,7 @@ struct ExtractedTextView: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            DetectionCards()
             ZStack {
                 SelectableTextView(text: vm.text)
                 if vm.status == .processing {

@@ -42,6 +42,18 @@ For development: `swift build` (see the SDK note below), then `.build/debug/Text
 
 Text is copied automatically. The panel also has **Copy**, **Clear** and **Re-scan**. **Esc** clears the result, or hides the panel if it's already empty. **⌘W** hides it and **⌘,** opens Settings.
 
+### Smart detection
+
+TEXTIFY recognizes three kinds of content and shows a small card above the text for each. Each has its own switch in **Settings → Smart detection**, and all of it runs on your Mac.
+
+| Detects | What happens |
+|---|---|
+| **QR codes and barcodes** | If the code is the main thing in the screenshot (or there's little other text), its content goes on the clipboard: the **link**, or the **password** for a Wi-Fi code. The card has Copy and **Open** buttons. Only `http`, `https`, `mailto` and `tel` links can be opened. |
+| **Events** (a future date *with a time*, in English or Hebrew: "Team sync Tue Dec 2 at 3 PM", "פגישה ביום ראשון בשעה 20:00") | A card with **Add to Calendar** opens an `.ics` in Calendar, which asks before adding. No Calendar permission is needed. Titles come from Apple's on-device model; Hebrew lines keep their own words. Plain dates and past timestamps (like receipt times) are ignored. |
+| **Receipts and invoices** (English and Hebrew: Total, סה"כ לתשלום, VAT, מע"מ, ₪ $ € £) | The card shows vendor, total, VAT and date. With *Save to file* on, the receipt is added to **`Expenses.csv`** in the save folder automatically; otherwise click **Log expense**. Re-scanning the same receipt doesn't duplicate the row. |
+
+The ledger is a CSV rather than an .xlsx so new rows can be appended without ever overwriting edits you make in Excel or Numbers. It opens in either with a double-click, Hebrew included.
+
 ### Save to file (optional)
 
 Turn on **Settings → Save to file** to also write every extraction to disk. It's off by default.
@@ -105,7 +117,7 @@ None. The global shortcut uses Carbon `RegisterEventHotKey`, which needs no Acce
 ## Testing
 
 ```bash
-scripts/run-tests.sh        # end-to-end suite: OCR, Hebrew, tables, .xlsx, clipboard (never saves files)
+scripts/run-tests.sh        # end-to-end suite: OCR, Hebrew, tables, .xlsx, QR, events, receipts, clipboard
 ```
 
 It skips the Hebrew checks without Tesseract and the table checks before macOS 26. CI runs the same script.
@@ -119,6 +131,8 @@ build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard --no-save  # same pipel
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard --save-to build/out [--append]  # also test auto-save
 build/TEXTIFY.app/Contents/MacOS/Textify --label build/test-images/invoice.png             # show the file label
 build/TEXTIFY.app/Contents/MacOS/Textify --table build/test-images/table-grid.png --xlsx out.xlsx  # detect + export a table
+build/TEXTIFY.app/Contents/MacOS/Textify --detect build/test-images/receipt.png [--log] [--ics out.ics]  # QR / events / receipts
+TEXTIFY_SAVE_DIR=/tmp/scratch …                                                              # redirect all saving (tests)
 /Applications/TEXTIFY.app/Contents/MacOS/Textify --login-item on|off|status                 # manage Launch at login
 TEXTIFY_SNAPSHOT_DIR=/tmp/snaps TEXTIFY_SNAPSHOT_IMAGE=build/test-images/mixed.png \
   build/TEXTIFY.app/Contents/MacOS/Textify               # renders each UI state to PNGs
@@ -139,6 +153,10 @@ Sources/Textify/
   TableExtractor.swift      table detection (Vision documents, macOS 26+; Hebrew cells via Tesseract)
   XLSXWriter.swift          dependency-free .xlsx writer (sheets, merges, number formats, RTL)
   TableClipboardFormat.swift tables as HTML + tab-separated values for the clipboard
+  BarcodeDetector.swift     QR codes / barcodes (links, Wi-Fi), what to copy, safe opening
+  EventDetector.swift       future date+time → event, on-device titles, .ics for Calendar
+  ReceiptParser.swift       English/Hebrew receipt fields + Expenses.csv ledger
+  Views/DetectionCards.swift result cards with one-click actions
   ImageLoader.swift         file/data → CGImage, format checks
   TextifyViewModel.swift    state machine (idle → processing → copied / no text / error)
   Views/                    ContentView, ImageDropZone, ExtractedTextView, SettingsView

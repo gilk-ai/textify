@@ -30,7 +30,11 @@ enum TextFileSaver {
     }
 
     static var folder: URL {
-        get { defaults.string(forKey: Keys.folder).map { URL(fileURLWithPath: $0, isDirectory: true) } ?? defaultFolder }
+        get {
+            // Test/debug override so automated runs never write into the user's real save folder.
+            if let dir = ProcessInfo.processInfo.environment["TEXTIFY_SAVE_DIR"] { return URL(fileURLWithPath: dir, isDirectory: true) }
+            return defaults.string(forKey: Keys.folder).map { URL(fileURLWithPath: $0, isDirectory: true) } ?? defaultFolder
+        }
         set { defaults.set(newValue.path, forKey: Keys.folder) }
     }
 

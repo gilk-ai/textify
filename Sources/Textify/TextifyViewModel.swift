@@ -25,6 +25,34 @@ final class TextifyViewModel: ObservableObject {
     @Published var saveError: String?
     /// Tables detected in the current image (macOS 26+). When non-empty, the clipboard also carries them as cells.
     @Published private(set) var tables: [ExtractedTable] = []
+
+    // Smart detection results for the current image.
+    @Published private(set) var codes: [DetectedCode] = []
+    @Published private(set) var events: [DetectedEvent] = []
+    @Published private(set) var receipt: DetectedReceipt?
+    /// Set once the receipt is in Expenses.csv (added now or already there).
+    @Published private(set) var receiptLedger: URL?
+    /// The code whose content was auto-copied instead of the text, if any.
+    @Published private(set) var copiedCode: DetectedCode?
+    /// Raw OCR text (the visible text may instead describe a QR code when the image had no text).
+    private var ocrText = ""
+
+    /// Full status-line message after a successful copy, including what was saved.
+    var successMessage: String {
+        guard let saved = savedURL else { return copiedMessage }
+        if copiedCode != nil { return String(copiedMessage.dropLast()) + " · saved" }
+        return saved.pathExtension == "xlsx" ? "Copied & saved table to Excel!" : "Copied & saved!"
+    }
+
+    /// Status-line message for a successful copy.
+    var copiedMessage: String {
+        guard let code = copiedCode else { return "Copied to clipboard!" }
+        switch code.kind {
+        case .link: return "Copied QR link!"
+        case .wifi(_, let password): return password == nil ? "Copied Wi-Fi network name!" : "Copied Wi-Fi password!"
+        case .text: return "Copied QR code content!"
+        }
+    }
     /// Whether the panel has keyboard focus (⌘V only reaches TEXTIFY when it does).
     @Published var panelIsKey = false
     private var becameKeyAt = Date.distantPast
@@ -78,9 +106,9 @@ final class TextifyViewModel: ObservableObject {
     func process(_ image: CGImage, force: Bool = false) {
         let fp = ImageLoader.fingerprint(image)
 
-        // Same image again: don't re-run OCR, just make sure the text is back on the clipboard.
+        // Same image again: don't re-run OCR, just make sure the result is back on the clipboard.
         if !force, fp == lastFingerprint, hasResult {
-            copyToClipboard()
+            autoCopy()
             return
         }
 
@@ -91,22 +119,27 @@ final class TextifyViewModel: ObservableObject {
         partiallyReadable = false
         savedURL = nil
         saveError = nil
-        tables = []
+        resetDetections()
 
         task = Task {
             do {
+                // QR/barcode detection runs alongside OCR: it decides what goes on the clipboard.
+                async let foundCodes = BarcodeDetector.detect(in: image)
                 let result = try await OCRService.recognizeText(in: image)
+                let found = await foundCodes
                 guard !Task.isCancelled else { return }
                 let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty {
+                if trimmed.isEmpty && found.isEmpty {
                     // Leave the clipboard untouched.
                     text = ""
                     status = .noText
                     return
                 }
-                text = trimmed
+                ocrText = trimmed
+                codes = found
+                text = trimmed.isEmpty ? found.map(\.displayText).joined(separator: "\n\n") : trimmed
                 partiallyReadable = result.hasLowConfidence
-                copyToClipboard()
+                autoCopy()
                 await enrichAndSave(image)
             } catch {
                 guard !Task.isCancelled else { return }
@@ -117,14 +150,65 @@ final class TextifyViewModel: ObservableObject {
 
     // MARK: - Actions
 
+    /// Copy button: always copies the visible text (plus any tables as cells).
     func copyToClipboard() {
         guard hasResult else { return }
+        write(text, tables: tables, code: nil)
+    }
+
+    /// Automatic copy after extraction: a prominent QR code's content, otherwise the text.
+    private func autoCopy() {
+        guard hasResult else { return }
+        if let code = codes.first, BarcodeDetector.shouldCopyCode(code, ocrText: ocrText) {
+            write(code.copyValue, tables: [], code: code)
+        } else {
+            write(text, tables: tables, code: nil)
+        }
+    }
+
+    private func write(_ value: String, tables: [ExtractedTable], code: DetectedCode?) {
         do {
-            try clipboard.writeText(text, tables: tables)
+            try clipboard.writeText(value, tables: tables)
+            copiedCode = code
             status = .copied
         } catch {
             status = .copyFailed(error.localizedDescription)
         }
+    }
+
+    func copyCode(_ code: DetectedCode) { write(code.copyValue, tables: [], code: code) }
+
+    func openCode(_ code: DetectedCode) { BarcodeDetector.open(code) }
+
+    func addToCalendar(_ event: DetectedEvent) {
+        do { try EventDetector.addToCalendar(event) } catch {
+            saveError = "Couldn't create the calendar event: \(error.localizedDescription)"
+        }
+    }
+
+    func addReceiptToLedger() {
+        guard let receipt else { return }
+        do {
+            switch try ExpenseLedger.log(receipt, savedFile: savedURL) {
+            case .added(let url), .duplicate(let url): receiptLedger = url
+            }
+        } catch {
+            saveError = "Couldn't add to \(ExpenseLedger.fileName): \(error.localizedDescription)"
+        }
+    }
+
+    func revealLedger() {
+        if let url = receiptLedger { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+    }
+
+    private func resetDetections() {
+        tables = []
+        codes = []
+        events = []
+        receipt = nil
+        receiptLedger = nil
+        copiedCode = nil
+        ocrText = ""
     }
 
     /// Runs after the plain text is already on the clipboard (so pasting is never delayed):
@@ -137,7 +221,13 @@ final class TextifyViewModel: ObservableObject {
         let captured = text
         let wantSave = TextFileSaver.isEnabled
 
+        // Receipts are parsed instantly; events, labels and tables run concurrently.
+        let parsedReceipt = ReceiptParser.parse(ocrText)
+        receipt = parsedReceipt
+        let source = ocrText
+        let wantEvents = EventDetector.isEnabled && parsedReceipt == nil // receipt timestamps aren't events
         async let labelTask: String? = wantSave ? FileLabeler.label(for: captured) : nil
+        async let eventsTask: [DetectedEvent] = wantEvents ? EventDetector.detect(in: source) : []
         let found: [ExtractedTable] = TableExtractor.isSupported
             ? await TableExtractor.tables(in: image, containsHebrew: HebrewOCRService.containsHebrew(captured))
             : []
@@ -145,8 +235,11 @@ final class TextifyViewModel: ObservableObject {
 
         if !found.isEmpty {
             tables = found
-            if clipboard.clipboardIsOurOwnText { try? clipboard.writeText(captured, tables: found) }
+            // Upgrade to spreadsheet cells only if our text (not a QR value) is still on the clipboard.
+            if copiedCode == nil, clipboard.clipboardIsOurOwnText { try? clipboard.writeText(captured, tables: found) }
         }
+        events = await eventsTask
+        guard !Task.isCancelled, text == captured else { return }
 
         guard wantSave else { return }
         let label = await labelTask
@@ -159,6 +252,7 @@ final class TextifyViewModel: ObservableObject {
             savedURL = nil
             saveError = "Copied, but couldn't save file: \(error.localizedDescription)"
         }
+        if receipt != nil, ExpenseLedger.isEnabled { addReceiptToLedger() }
     }
 
     func revealSavedFile() {
@@ -171,7 +265,7 @@ final class TextifyViewModel: ObservableObject {
         text = ""
         savedURL = nil
         saveError = nil
-        tables = []
+        resetDetections()
         status = .idle
         partiallyReadable = false
         lastImage = nil

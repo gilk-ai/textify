@@ -35,8 +35,10 @@ enum DebugSnapshots {
             vm.status = .idle; vm.showSettings = true
             try? await Task.sleep(for: .milliseconds(300)); snap(dir, "5-settings")
             if let scroll = NSApp.windows.first(where: { $0 is TextifyPanel })?.contentView?.firstScrollView {
+                scroll.documentView?.scroll(NSPoint(x: 0, y: 420))
+                try? await Task.sleep(for: .milliseconds(300)); snap(dir, "6-settings-middle")
                 scroll.documentView?.scroll(NSPoint(x: 0, y: 10_000))
-                try? await Task.sleep(for: .milliseconds(300)); snap(dir, "6-settings-scrolled")
+                try? await Task.sleep(for: .milliseconds(300)); snap(dir, "7-settings-bottom")
             }
             NSApp.terminate(nil)
         }

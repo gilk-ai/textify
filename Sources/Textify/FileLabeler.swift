@@ -21,21 +21,26 @@ enum FileLabeler {
     // MARK: - On-device model
 
     private static func modelLabel(for text: String) async -> String? {
+        await askModel(instructions: """
+            You give short, memorable titles to text captured from screenshots, like a person \
+            naming a note. Write 2 to 5 natural words in Title Case that say what the text is about, \
+            including a distinctive name, number or subject when there is one. Use spaces, not \
+            underscores. Reply with the title only.
+            Examples: "Acme Invoice Due December", "Lemon Olive Oil Cake", "Monday Team Meeting Notes", \
+            "Flight Confirmation Tel Aviv".
+            """, prompt: "Text:\n\(text.prefix(1500))")
+    }
+
+    /// One-shot question to Apple's on-device language model (macOS 26+, Apple Intelligence on).
+    /// Returns nil when the model is unavailable, fails, or takes longer than the timeout.
+    static func askModel(instructions: String, prompt: String) async -> String? {
         #if canImport(FoundationModels)
         guard #available(macOS 26, *) else { return nil }
         guard case .available = SystemLanguageModel.default.availability else { return nil }
-        let snippet = String(text.prefix(1500))
         return await withTaskGroup(of: String?.self) { group in
             group.addTask {
-                let session = LanguageModelSession(instructions: """
-                    You give short, memorable titles to text captured from screenshots, like a person \
-                    naming a note. Write 2 to 5 natural words in Title Case that say what the text is about, \
-                    including a distinctive name, number or subject when there is one. Use spaces, not \
-                    underscores. Reply with the title only.
-                    Examples: "Acme Invoice Due December", "Lemon Olive Oil Cake", "Monday Team Meeting Notes", \
-                    "Flight Confirmation Tel Aviv".
-                    """)
-                return try? await session.respond(to: "Text:\n\(snippet)").content
+                let session = LanguageModelSession(instructions: instructions)
+                return try? await session.respond(to: prompt).content
             }
             group.addTask {
                 try? await Task.sleep(for: modelTimeout)
