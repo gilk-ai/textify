@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var saveFolder = TextFileSaver.folder
     @State private var saveMode = TextFileSaver.mode
     @State private var saveTables = TableExtractor.isEnabled
+    @State private var showInDock = DockPresence.showInDock
     @State private var qrCopy = BarcodeDetector.copyCodeContent
     @State private var detectEvents = EventDetector.isEnabled
     @State private var logReceipts = ExpenseLedger.isEnabled
@@ -43,6 +44,10 @@ struct SettingsView: View {
             }
 
             section("General") {
+                Toggle("Show in Dock", isOn: $showInDock)
+                    .toggleStyle(.switch)
+                    .tint(Theme.accent)
+                    .onChange(of: showInDock) { _, on in DockPresence.showInDock = on }
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .toggleStyle(.switch)
                     .tint(Theme.accent)

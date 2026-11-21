@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" width="128" alt="TEXTIFY icon"></p>
+
 # TEXTIFY
 
 A tiny macOS menu-bar utility: give it a screenshot and the text lands on your clipboard, ready to paste.
@@ -21,7 +23,7 @@ open build/TEXTIFY.app
 scripts/build-app.sh --install  # builds and copies to /Applications
 ```
 
-TEXTIFY lives in the menu bar (viewfinder icon) and has no Dock icon. Quit it from the menu-bar menu, or with ⌘Q while the panel is focused.
+TEXTIFY has a Dock icon and a menu-bar item (viewfinder icon). Clicking either one brings up the panel. If you prefer menu-bar only, turn off **Settings → Show in Dock**. Quit with ⌘Q, or from either menu.
 
 For development: `swift build` (see the SDK note below), then `.build/debug/Textify`.
 
