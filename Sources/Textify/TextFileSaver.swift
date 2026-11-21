@@ -86,17 +86,6 @@ enum TextFileSaver {
         }
     }
 
-    /// Everything a save needs besides the text, computed concurrently: the file label and,
-    /// if enabled and supported, any clearly structured tables in the image.
-    static func prepare(text: String, image: CGImage?) async -> (label: String, tables: [ExtractedTable]) {
-        async let label = FileLabeler.label(for: text)
-        async let tables: [ExtractedTable] = {
-            guard let image, TableExtractor.isEnabled, TableExtractor.isSupported else { return [] }
-            return await TableExtractor.tables(in: image, containsHebrew: HebrewOCRService.containsHebrew(text))
-        }()
-        return await (label, tables)
-    }
-
     private static func uniqueURL(in folder: URL, base: String, ext: String) -> URL {
         var url = folder.appendingPathComponent("\(base).\(ext)")
         var n = 2

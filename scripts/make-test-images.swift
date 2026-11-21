@@ -67,4 +67,25 @@ renderTable("table-grid.png", sales, grid: true, colW: [200, 140, 110, 150, 110]
 renderTable("table-plain.png", sales, grid: false, colW: [200, 140, 110, 150, 110])
 renderTable("table-hebrew.png", [["מוצר", "אזור", "כמות", "מחיר"], ["מחשב נייד", "צפון", "120", "1,299.00"], ["מסך", "דרום", "85", "349.50"]],
             grid: true, colW: [200, 140, 110, 150], rtl: true)
+// A table whose title row spans all columns (merged cell).
+do {
+    let w: CGFloat = 480, rowH: CGFloat = 50, pad: CGFloat = 40
+    let size = NSSize(width: w + 2 * pad, height: 4 * rowH + 2 * pad)
+    let img = NSImage(size: size); img.lockFocus()
+    NSColor.white.setFill(); NSRect(origin: .zero, size: size).fill()
+    func cell(_ t: String, _ x: CGFloat, _ r: Int, _ cw: CGFloat, bold: Bool = false) {
+        let rect = NSRect(x: pad + x, y: size.height - pad - CGFloat(r + 1) * rowH, width: cw, height: rowH)
+        NSColor.gray.setStroke(); NSBezierPath(rect: rect).stroke()
+        NSAttributedString(string: t, attributes: [.font: bold ? NSFont.boldSystemFont(ofSize: 22) : NSFont.systemFont(ofSize: 22)])
+            .draw(at: NSPoint(x: rect.minX + 12, y: rect.minY + 12))
+    }
+    cell("Q1 Sales Report", 0, 0, w, bold: true)
+    cell("Team", 0, 1, 200, bold: true); cell("Jan", 200, 1, 140, bold: true); cell("Feb", 340, 1, 140, bold: true)
+    cell("Alpha", 0, 2, 200); cell("1,200", 200, 2, 140); cell("1,450", 340, 2, 140)
+    cell("Beta", 0, 3, 200); cell("980", 200, 3, 140); cell("1,010", 340, 3, 140)
+    img.unlockFocus()
+    try! NSBitmapImageRep(data: img.tiffRepresentation!)!.representation(using: .png, properties: [:])!
+        .write(to: out.appendingPathComponent("table-merged.png"))
+    print("wrote table-merged.png")
+}
 render("blank.png", [], blank: true)

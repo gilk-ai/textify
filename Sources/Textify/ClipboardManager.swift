@@ -49,13 +49,19 @@ final class ClipboardManager {
         throw ClipboardError.noImage
     }
 
+    static let tsvType = NSPasteboard.PasteboardType("public.utf8-tab-separated-values-text")
+
     /// Replaces the clipboard contents with `text`. Throws if the write did not stick.
-    func writeText(_ text: String) throws {
+    /// With `tables`, also offers HTML + tab-separated versions, so spreadsheets and rich-text apps
+    /// paste real cells while plain-text apps still get `text`.
+    func writeText(_ text: String, tables: [ExtractedTable] = []) throws {
         pb.clearContents()
-        guard pb.setString(text, forType: .string),
-              pb.string(forType: .string) == text else {
-            throw ClipboardError.writeFailed
+        var ok = pb.setString(text, forType: .string)
+        if ok, !tables.isEmpty {
+            ok = pb.setString(TableClipboardFormat.html(tables), forType: .html)
+                && pb.setString(TableClipboardFormat.tsv(tables), forType: Self.tsvType)
         }
+        guard ok, pb.string(forType: .string) == text else { throw ClipboardError.writeFailed }
         lastOwnWriteChangeCount = pb.changeCount
     }
 }

@@ -17,6 +17,19 @@ struct ExtractedTable {
     var isRightToLeft: Bool {
         TextLayout.isPredominantlyRTL(cells.map(\.text).joined(separator: " "))
     }
+
+    /// Columns in reading order. Vision numbers columns left→right as they appear in the image;
+    /// for RTL tables the first logical column is the rightmost one, so mirror the column indexes.
+    /// (An RTL spreadsheet then displays them in the same visual order as the image.)
+    func inReadingOrder() -> ExtractedTable {
+        guard isRightToLeft else { return self }
+        var t = self
+        t.cells = cells.map {
+            .init(row: $0.row, column: columnCount - $0.column - $0.columnSpan,
+                  rowSpan: $0.rowSpan, columnSpan: $0.columnSpan, text: $0.text)
+        }
+        return t
+    }
 }
 
 /// Detects clearly structured tables using Vision's document understanding (macOS 26+, on-device).

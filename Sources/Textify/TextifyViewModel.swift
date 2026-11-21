@@ -23,6 +23,8 @@ final class TextifyViewModel: ObservableObject {
     @Published var savedURL: URL?
     /// Why auto-save failed, if it did. The clipboard copy still stands.
     @Published var saveError: String?
+    /// Tables detected in the current image (macOS 26+). When non-empty, the clipboard also carries them as cells.
+    @Published private(set) var tables: [ExtractedTable] = []
     /// Whether the panel has keyboard focus (⌘V only reaches TEXTIFY when it does).
     @Published var panelIsKey = false
     private var becameKeyAt = Date.distantPast
@@ -89,6 +91,7 @@ final class TextifyViewModel: ObservableObject {
         partiallyReadable = false
         savedURL = nil
         saveError = nil
+        tables = []
 
         task = Task {
             do {
@@ -104,7 +107,7 @@ final class TextifyViewModel: ObservableObject {
                 text = trimmed
                 partiallyReadable = result.hasLowConfidence
                 copyToClipboard()
-                await saveIfEnabled()
+                await enrichAndSave(image)
             } catch {
                 guard !Task.isCancelled else { return }
                 fail(error)
@@ -117,23 +120,40 @@ final class TextifyViewModel: ObservableObject {
     func copyToClipboard() {
         guard hasResult else { return }
         do {
-            try clipboard.writeText(text)
+            try clipboard.writeText(text, tables: tables)
             status = .copied
         } catch {
             status = .copyFailed(error.localizedDescription)
         }
     }
 
-    /// Writes the result to disk when the user opted in. Only called for fresh OCR results,
-    /// so pasting the same image twice doesn't create duplicate files.
-    /// The clipboard is already updated before this runs; labeling only delays the file.
-    private func saveIfEnabled() async {
-        guard TextFileSaver.isEnabled, hasResult else { return }
+    /// Runs after the plain text is already on the clipboard (so pasting is never delayed):
+    /// 1. detects tables and, if found, upgrades the clipboard with spreadsheet-ready cells —
+    ///    only if the clipboard still holds our text (never clobbers something the user copied since);
+    /// 2. saves to disk when the user opted in. Only called for fresh OCR results,
+    ///    so pasting the same image twice doesn't create duplicate files.
+    private func enrichAndSave(_ image: CGImage) async {
+        guard hasResult else { return }
         let captured = text
-        let (label, tables) = await TextFileSaver.prepare(text: captured, image: lastImage)
+        let wantSave = TextFileSaver.isEnabled
+
+        async let labelTask: String? = wantSave ? FileLabeler.label(for: captured) : nil
+        let found: [ExtractedTable] = TableExtractor.isSupported
+            ? await TableExtractor.tables(in: image, containsHebrew: HebrewOCRService.containsHebrew(captured))
+            : []
         guard !Task.isCancelled, text == captured else { return } // a newer result replaced this one
+
+        if !found.isEmpty {
+            tables = found
+            if clipboard.clipboardIsOurOwnText { try? clipboard.writeText(captured, tables: found) }
+        }
+
+        guard wantSave else { return }
+        let label = await labelTask
+        guard !Task.isCancelled, text == captured else { return }
         do {
-            savedURL = try TextFileSaver.save(captured, label: label, tables: tables)
+            savedURL = try TextFileSaver.save(captured, label: label,
+                                              tables: TableExtractor.isEnabled ? found : [])
             saveError = nil
         } catch {
             savedURL = nil
@@ -151,6 +171,7 @@ final class TextifyViewModel: ObservableObject {
         text = ""
         savedURL = nil
         saveError = nil
+        tables = []
         status = .idle
         partiallyReadable = false
         lastImage = nil

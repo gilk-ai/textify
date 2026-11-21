@@ -38,6 +38,8 @@ For development: `swift build` (see the SDK note below), then `.build/debug/Text
 >
 > Tip: **⌘⇧4** saves screenshots to the Desktop. Add **⌃** (⌃⇧⌘4) to copy them to the clipboard instead.
 
+Text is copied automatically. **Tables paste as cells:** when the screenshot contains a table (macOS 26+), the clipboard also carries it as an HTML table and as tab-separated values. Pasting into Excel, Numbers, Google Sheets, Mail or Docs creates a real table, while plain-text apps get the regular text. This upgrade only happens if the clipboard still holds TEXTIFY's text, so anything you've copied since is never overwritten.
+
 Text is copied automatically. The panel also has **Copy**, **Clear** and **Re-scan**. **Esc** clears the result, or hides the panel if it's already empty. **⌘W** hides it and **⌘,** opens Settings.
 
 ### Save to file (optional)
@@ -96,19 +98,28 @@ None. The global shortcut uses Carbon `RegisterEventHotKey`, which needs no Acce
 - **⌘⇧V** shadows "Paste and Match Style" in other apps while it's enabled. If you use that a lot, switch to ⌃⌥⌘V or ⌃⇧T in Settings.
 - **SDK note:** the macOS 27 SDK in Command Line Tools ships SwiftUI macros (`@State`) without their compiler plugin, so `build-app.sh` builds against the macOS 26 SDK when Xcode isn't installed. For a manual build, use `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk swift build`. With Xcode installed, plain `swift build` works.
 - The app is ad-hoc signed. That's fine on the Mac that built it. Copying it to another Mac would require right-click → Open, or a Developer ID signature and notarization.
-- "Launch at login" works best once the app is in /Applications.
+- "Launch at login" is tied to the app's location. After `scripts/build-app.sh --install`, enable it from the installed copy, in Settings or with `--login-item on`.
 - **"No text found" on an image that clearly has text:** macOS caches compiled OCR models per app, and that cache can get corrupted. TEXTIFY automatically retries with Vision's fast model, so you'll get the text, flagged "some text may be unclear". To fix the cache itself, quit TEXTIFY and delete `~/Library/Caches/com.textify.app`; macOS rebuilds it on the next use.
 - Tesseract's very first run can take some time while it loads its model. After that, it adds about 0.1 s per image.
 
-## Testing helpers
+## Testing
+
+```bash
+scripts/run-tests.sh        # end-to-end suite: OCR, Hebrew, tables, .xlsx, clipboard (never saves files)
+```
+
+It skips the Hebrew checks without Tesseract and the table checks before macOS 26. CI runs the same script.
+
+Individual helpers:
 
 ```bash
 swift scripts/make-test-images.swift build/test-images   # English / Hebrew / mixed / multi-paragraph / blank
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr build/test-images/hebrew.png
-build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard  # same pipeline as ⌘V, headless
+build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard --no-save  # same pipeline as ⌘V, headless
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard --save-to build/out [--append]  # also test auto-save
 build/TEXTIFY.app/Contents/MacOS/Textify --label build/test-images/invoice.png             # show the file label
 build/TEXTIFY.app/Contents/MacOS/Textify --table build/test-images/table-grid.png --xlsx out.xlsx  # detect + export a table
+/Applications/TEXTIFY.app/Contents/MacOS/Textify --login-item on|off|status                 # manage Launch at login
 TEXTIFY_SNAPSHOT_DIR=/tmp/snaps TEXTIFY_SNAPSHOT_IMAGE=build/test-images/mixed.png \
   build/TEXTIFY.app/Contents/MacOS/Textify               # renders each UI state to PNGs
 ```
@@ -127,6 +138,7 @@ Sources/Textify/
   FileLabeler.swift         on-device label for saved files (Apple model → heuristic)
   TableExtractor.swift      table detection (Vision documents, macOS 26+; Hebrew cells via Tesseract)
   XLSXWriter.swift          dependency-free .xlsx writer (sheets, merges, number formats, RTL)
+  TableClipboardFormat.swift tables as HTML + tab-separated values for the clipboard
   ImageLoader.swift         file/data → CGImage, format checks
   TextifyViewModel.swift    state machine (idle → processing → copied / no text / error)
   Views/                    ContentView, ImageDropZone, ExtractedTextView, SettingsView

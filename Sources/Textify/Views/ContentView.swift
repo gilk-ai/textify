@@ -127,6 +127,9 @@ struct StatusBar: View {
                          : vm.savedURL?.pathExtension == "xlsx" ? "Copied & saved table to Excel!" : "Copied & saved!")
                         .foregroundStyle(Theme.accent).fontWeight(.semibold)
                 }
+                if !vm.tables.isEmpty, vm.savedURL?.pathExtension != "xlsx" {
+                    Text("· table pastes as cells").foregroundStyle(Theme.secondary)
+                }
                 if vm.partiallyReadable {
                     Text("· some text may be unclear").foregroundStyle(Theme.warning)
                 }

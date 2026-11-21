@@ -45,17 +45,8 @@ enum XLSXWriter {
     }
 
     private static func sheetXML(for table: ExtractedTable, formats: inout NumberFormats) -> String {
-        // Vision numbers columns left→right as they appear in the image. A right-to-left sheet shows
-        // column A on the right, so mirror RTL tables to keep the same visual layout as the image.
-        var table = table
-        if table.isRightToLeft {
-            table.cells = table.cells.map { c in
-                var m = c
-                m = .init(row: c.row, column: table.columnCount - c.column - c.columnSpan,
-                          rowSpan: c.rowSpan, columnSpan: c.columnSpan, text: c.text)
-                return m
-            }
-        }
+        // A right-to-left sheet shows column A on the right, so reading order keeps the image's layout.
+        let table = table.inReadingOrder()
         let grid = Dictionary(table.cells.map { ("\($0.row),\($0.column)", $0) }, uniquingKeysWith: { a, _ in a })
         let headerRow = table.cells.filter { $0.row == 0 }
         let hasHeader = table.rowCount > 1 && !headerRow.isEmpty

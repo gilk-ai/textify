@@ -1,11 +1,13 @@
 import Foundation
+import ServiceManagement
 
 /// Headless entry points used for testing the OCR + clipboard pipeline without the UI.
 ///   Textify --ocr <image>      print recognized text
 ///   Textify --ocr-clipboard    OCR the clipboard image and copy the text back (same path as ⌘V)
 ///   Textify --label <image>    print the auto-save label for an image's text
 ///   Textify --table <image> [--xlsx out.xlsx]   print detected tables, optionally export them
-///       [--save-to <dir> [--append]]  also save the text, overriding the Settings choice
+///       [--save-to <dir> [--append]] | [--no-save]   override the Settings save choice
+///   Textify --login-item on|off|status   manage "Launch at login" for this app bundle  also save the text, overriding the Settings choice
 enum CommandLineTools {
     static func runIfRequested() -> Bool {
         let args = CommandLine.arguments
@@ -30,6 +32,20 @@ enum CommandLineTools {
                 let label = blocking { await FileLabeler.label(for: text) }
                 print(label + String(format: "    (%.2fs, heuristic: %@)", Date().timeIntervalSince(start),
                                      FileLabeler.heuristicLabel(for: text)))
+                exit(0)
+            } catch {
+                fputs("Error: \(error.localizedDescription)\n", stderr); exit(1)
+            }
+        }
+        if let i = args.firstIndex(of: "--login-item"), i + 1 < args.count {
+            let service = SMAppService.mainApp
+            do {
+                switch args[i + 1] {
+                case "on": try service.register()
+                case "off": try service.unregister()
+                default: break
+                }
+                print("Launch at login: \(service.status == .enabled ? "on" : "off") (\(Bundle.main.bundlePath))")
                 exit(0)
             } catch {
                 fputs("Error: \(error.localizedDescription)\n", stderr); exit(1)
@@ -67,15 +83,23 @@ enum CommandLineTools {
                 if text.isEmpty { fputs("No text found. Clipboard unchanged.\n", stderr); exit(2) }
                 try ClipboardManager.shared.writeText(text)
                 print("Copied \(text.count) characters to clipboard.")
+                // Same enrichment as the app: tables also go on the clipboard as cells.
+                let tables = TableExtractor.isSupported
+                    ? blocking { await TableExtractor.tables(in: image, containsHebrew: HebrewOCRService.containsHebrew(text)) }
+                    : []
+                if !tables.isEmpty {
+                    try ClipboardManager.shared.writeText(text, tables: tables)
+                    print("Clipboard also holds \(tables.count) table(s) as HTML + tab-separated cells.")
+                }
                 // Same opt-in auto-save as the app. `--save-to <dir>` forces it on for testing.
                 if let i = args.firstIndex(of: "--save-to"), i + 1 < args.count {
-                    let (label, tables) = blocking { await TextFileSaver.prepare(text: text, image: image) }
-                    let url = try TextFileSaver.save(text, label: label, tables: tables, to: URL(fileURLWithPath: args[i + 1], isDirectory: true),
+                    let label = blocking { await FileLabeler.label(for: text) }
+                    let url = try TextFileSaver.save(text, label: label, tables: TableExtractor.isEnabled ? tables : [], to: URL(fileURLWithPath: args[i + 1], isDirectory: true),
                                                      mode: args.contains("--append") ? .append : .newFile)
                     print("Saved to \(url.path)")
-                } else if TextFileSaver.isEnabled {
-                    let (label, tables) = blocking { await TextFileSaver.prepare(text: text, image: image) }
-                    print("Saved to \(try TextFileSaver.save(text, label: label, tables: tables).path)")
+                } else if TextFileSaver.isEnabled, !args.contains("--no-save") {
+                    let label = blocking { await FileLabeler.label(for: text) }
+                    print("Saved to \(try TextFileSaver.save(text, label: label, tables: TableExtractor.isEnabled ? tables : []).path)")
                 }
                 exit(0)
             } catch {
