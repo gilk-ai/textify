@@ -31,63 +31,76 @@ enum HebrewOCRService {
 
     /// Returns Hebrew-containing lines as fragments in Vision's normalized coordinate space.
     static func recognizeHebrewLines(in image: CGImage) throws -> [Fragment] {
-        guard let bin = tesseractPath else { return [] }
-        guard let png = pngData(image) else { return [] }
+        guard let tsv = try runTesseract(image) else { return [] }
+        return parse(tsv: tsv, width: CGFloat(image.width), height: CGFloat(image.height))
+    }
 
+    /// Every recognized word (Hebrew or not) with its own box, in Tesseract's reading order.
+    /// Used to fill table cells when a table contains Hebrew.
+    static func recognizeWords(in image: CGImage) throws -> [Fragment] {
+        guard let tsv = try runTesseract(image) else { return [] }
+        return words(tsv: tsv, width: CGFloat(image.width), height: CGFloat(image.height)).map(\.fragment)
+    }
+
+    private static func runTesseract(_ image: CGImage) throws -> String? {
+        guard let bin = tesseractPath, let png = pngData(image) else { return nil }
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: bin)
-        // --psm 3: automatic page segmentation. heb+eng so mixed lines keep their English words.
         proc.arguments = ["stdin", "stdout", "-l", "heb+eng", "--psm", "3", "tsv"]
         let input = Pipe(), output = Pipe()
         proc.standardInput = input
         proc.standardOutput = output
         proc.standardError = FileHandle.nullDevice
         try proc.run()
-
-        // Write and read concurrently so large images can't deadlock the pipes.
         DispatchQueue.global().async {
             input.fileHandleForWriting.write(png)
             try? input.fileHandleForWriting.close()
         }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         proc.waitUntilExit()
-        guard proc.terminationStatus == 0, let tsv = String(data: data, encoding: .utf8) else { return [] }
-        return parse(tsv: tsv, width: CGFloat(image.width), height: CGFloat(image.height))
+        guard proc.terminationStatus == 0 else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
-    /// Parses Tesseract TSV (word level) into line fragments, keeping only lines with Hebrew letters.
-    static func parse(tsv: String, width: CGFloat, height: CGFloat) -> [Fragment] {
-        struct Line { var words: [String] = []; var rect: CGRect = .null }
-        var lines: [String: Line] = [:]
-        var order: [String] = []
-
+    /// Word rows from Tesseract TSV, with boxes converted to Vision's normalized coordinates.
+    private static func words(tsv: String, width: CGFloat, height: CGFloat) -> [(fragment: Fragment, lineKey: String)] {
+        var out: [(Fragment, String)] = []
         for row in tsv.split(separator: "\n").dropFirst() {
             let c = row.split(separator: "\t", omittingEmptySubsequences: false)
             guard c.count >= 12, c[0] == "5",
                   let conf = Double(c[10]), conf > 30,
                   let l = Double(c[6]), let t = Double(c[7]), let w = Double(c[8]), let h = Double(c[9])
             else { continue }
-            // Strip invisible bidi control marks Tesseract sometimes emits (LRM/RLM/embeddings/isolates).
-            let word = String(String.UnicodeScalarView(c[11].unicodeScalars.filter {
-                !(0x200E...0x200F).contains($0.value) && !(0x202A...0x202E).contains($0.value)
-                    && !(0x2066...0x2069).contains($0.value)
-            })).trimmingCharacters(in: .whitespaces)
+            let word = stripBidiMarks(String(c[11])).trimmingCharacters(in: .whitespaces)
             guard !word.isEmpty else { continue }
-            let key = "\(c[2])-\(c[3])-\(c[4])" // block-paragraph-line
-            if lines[key] == nil { order.append(key); lines[key] = Line() }
-            lines[key]!.words.append(word)
-            lines[key]!.rect = lines[key]!.rect.union(CGRect(x: l, y: t, width: w, height: h))
+            // Pixel coords (origin top-left) → Vision normalized coords (origin bottom-left).
+            let box = CGRect(x: l / width, y: 1 - (t + h) / height, width: w / width, height: h / height)
+            out.append((Fragment(text: word, box: box), "\(c[2])-\(c[3])-\(c[4])"))
         }
+        return out
+    }
 
+    /// Removes invisible bidi control marks Tesseract sometimes emits (LRM/RLM/embeddings/isolates).
+    private static func stripBidiMarks(_ s: String) -> String {
+        String(String.UnicodeScalarView(s.unicodeScalars.filter {
+            !(0x200E...0x200F).contains($0.value) && !(0x202A...0x202E).contains($0.value)
+                && !(0x2066...0x2069).contains($0.value)
+        }))
+    }
+
+    /// Parses Tesseract TSV into line fragments, keeping only lines with Hebrew letters.
+    static func parse(tsv: String, width: CGFloat, height: CGFloat) -> [Fragment] {
+        var lines: [String: (words: [String], box: CGRect)] = [:]
+        var order: [String] = []
+        for (frag, key) in words(tsv: tsv, width: width, height: height) {
+            if lines[key] == nil { order.append(key); lines[key] = ([], .null) }
+            lines[key]!.words.append(frag.text)
+            lines[key]!.box = lines[key]!.box.union(frag.box)
+        }
         return order.compactMap { key in
             guard let line = lines[key] else { return nil }
             let text = line.words.joined(separator: " ")
-            guard containsHebrew(text) else { return nil }
-            let r = line.rect
-            // Pixel coords (origin top-left) → Vision normalized coords (origin bottom-left).
-            let box = CGRect(x: r.minX / width, y: 1 - r.maxY / height,
-                             width: r.width / width, height: r.height / height)
-            return Fragment(text: text, box: box)
+            return containsHebrew(text) ? Fragment(text: text, box: line.box) : nil
         }
     }
 

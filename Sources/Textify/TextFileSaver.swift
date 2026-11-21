@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// Optional, opt-in saving of extracted text to disk.
 enum TextFileSaver {
@@ -38,19 +39,32 @@ enum TextFileSaver {
         set { defaults.set(newValue.rawValue, forKey: Keys.mode) }
     }
 
-    /// Writes `text` according to the current settings. Returns the file written to.
+    /// Writes `text` according to the current settings. Returns the main file written to.
+    ///
+    /// When `tables` is non-empty the image held a clearly structured table:
+    /// - New-file mode writes a single .xlsx (one sheet per table + a "Full Text" sheet) instead of .txt.
+    /// - Append mode still appends the text to the log, and writes the .xlsx next to it.
     @discardableResult
-    static func save(_ text: String, label: String? = nil, to folder: URL = folder, mode: Mode = mode,
-                     date: Date = Date()) throws -> URL {
+    static func save(_ text: String, label: String? = nil, tables: [ExtractedTable] = [],
+                     to folder: URL = folder, mode: Mode = mode, date: Date = Date()) throws -> URL {
         let label = label.flatMap(FileLabeler.sanitize)
         let fm = FileManager.default
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
 
+        var base = "TEXTIFY \(stamp(date, "yyyy-MM-dd 'at' HH.mm.ss"))"
+        if let label { base += " - \(label)" }
+
+        var spreadsheet: URL?
+        if !tables.isEmpty {
+            let url = uniqueURL(in: folder, base: base, ext: "xlsx")
+            try XLSXWriter.write(tables: tables, fullText: text, to: url)
+            spreadsheet = url
+        }
+
         switch mode {
         case .newFile:
-            var base = "TEXTIFY \(stamp(date, "yyyy-MM-dd 'at' HH.mm.ss"))"
-            if let label { base += " - \(label)" }
-            let url = uniqueURL(in: folder, base: base)
+            if let spreadsheet { return spreadsheet }
+            let url = uniqueURL(in: folder, base: base, ext: "txt")
             try (text + "\n").write(to: url, atomically: true, encoding: .utf8)
             return url
 
@@ -58,7 +72,8 @@ enum TextFileSaver {
             let url = folder.appendingPathComponent(appendFileName)
             // One shared file, so the label goes into each entry's header instead of the file name.
             let header = [stamp(date, "yyyy-MM-dd HH:mm:ss"), label].compactMap { $0 }.joined(separator: " · ")
-            let entry = "── \(header) ──\n\(text)\n\n"
+            let note = spreadsheet.map { "[Table saved as \($0.lastPathComponent)]\n" } ?? ""
+            let entry = "── \(header) ──\n\(note)\(text)\n\n"
             if fm.fileExists(atPath: url.path) {
                 let handle = try FileHandle(forWritingTo: url)
                 defer { try? handle.close() }
@@ -67,15 +82,26 @@ enum TextFileSaver {
             } else {
                 try entry.write(to: url, atomically: true, encoding: .utf8)
             }
-            return url
+            return spreadsheet ?? url
         }
     }
 
-    private static func uniqueURL(in folder: URL, base: String) -> URL {
-        var url = folder.appendingPathComponent("\(base).txt")
+    /// Everything a save needs besides the text, computed concurrently: the file label and,
+    /// if enabled and supported, any clearly structured tables in the image.
+    static func prepare(text: String, image: CGImage?) async -> (label: String, tables: [ExtractedTable]) {
+        async let label = FileLabeler.label(for: text)
+        async let tables: [ExtractedTable] = {
+            guard let image, TableExtractor.isEnabled, TableExtractor.isSupported else { return [] }
+            return await TableExtractor.tables(in: image, containsHebrew: HebrewOCRService.containsHebrew(text))
+        }()
+        return await (label, tables)
+    }
+
+    private static func uniqueURL(in folder: URL, base: String, ext: String) -> URL {
+        var url = folder.appendingPathComponent("\(base).\(ext)")
         var n = 2
         while FileManager.default.fileExists(atPath: url.path) {
-            url = folder.appendingPathComponent("\(base) \(n).txt")
+            url = folder.appendingPathComponent("\(base) \(n).\(ext)")
             n += 1
         }
         return url

@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var autoSave = TextFileSaver.isEnabled
     @State private var saveFolder = TextFileSaver.folder
     @State private var saveMode = TextFileSaver.mode
+    @State private var saveTables = TableExtractor.isEnabled
 
     var body: some View {
         ScrollView(showsIndicators: false) { settingsContent }
@@ -71,9 +72,22 @@ struct SettingsView: View {
                         Button("Show") { revealFolder() }.controlSize(.small)
                     }
                     Text(saveMode == .newFile
-                         ? "Each extraction becomes its own .txt file."
+                         ? "Each extraction becomes its own file, named with a short label."
                          : "Extractions are appended to “\(TextFileSaver.appendFileName)” with a timestamp.")
                         .font(.system(size: 10)).foregroundStyle(Theme.secondary)
+
+                    Toggle("Save tables as Excel spreadsheets", isOn: $saveTables)
+                        .toggleStyle(.switch)
+                        .tint(Theme.accent)
+                        .disabled(!TableExtractor.isSupported)
+                        .onChange(of: saveTables) { _, on in TableExtractor.isEnabled = on }
+                    Text(TableExtractor.isSupported
+                         ? (saveMode == .newFile
+                            ? "When a screenshot contains a clear table, it's saved as .xlsx with the same rows, columns and merged cells, instead of .txt."
+                            : "When a screenshot contains a clear table, an .xlsx with the same rows, columns and merged cells is saved next to the log.")
+                         : "Table detection requires macOS 26 or later.")
+                        .font(.system(size: 10)).foregroundStyle(Theme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 

@@ -130,10 +130,10 @@ final class TextifyViewModel: ObservableObject {
     private func saveIfEnabled() async {
         guard TextFileSaver.isEnabled, hasResult else { return }
         let captured = text
-        let label = await FileLabeler.label(for: captured)
+        let (label, tables) = await TextFileSaver.prepare(text: captured, image: lastImage)
         guard !Task.isCancelled, text == captured else { return } // a newer result replaced this one
         do {
-            savedURL = try TextFileSaver.save(captured, label: label)
+            savedURL = try TextFileSaver.save(captured, label: label, tables: tables)
             saveError = nil
         } catch {
             savedURL = nil

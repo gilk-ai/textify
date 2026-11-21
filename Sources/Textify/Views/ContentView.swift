@@ -123,7 +123,8 @@ struct StatusBar: View {
                     Text(saveError).foregroundStyle(Theme.warning)
                 } else {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accent)
-                    Text(vm.savedURL == nil ? "Copied to clipboard!" : "Copied & saved!")
+                    Text(vm.savedURL == nil ? "Copied to clipboard!"
+                         : vm.savedURL?.pathExtension == "xlsx" ? "Copied & saved table to Excel!" : "Copied & saved!")
                         .foregroundStyle(Theme.accent).fontWeight(.semibold)
                 }
                 if vm.partiallyReadable {

@@ -21,6 +21,12 @@ enum DebugSnapshots {
                 try? await Task.sleep(for: .milliseconds(80))
                 snap(dir, "2-processing")
                 while vm.status == .processing { try? await Task.sleep(for: .milliseconds(100)) }
+                // Auto-save (label + table detection) finishes after the clipboard copy; wait for it.
+                if TextFileSaver.isEnabled {
+                    for _ in 0..<80 where vm.savedURL == nil && vm.saveError == nil {
+                        try? await Task.sleep(for: .milliseconds(100))
+                    }
+                }
                 try? await Task.sleep(for: .milliseconds(300))
                 snap(dir, "3-result")
             }
@@ -28,6 +34,10 @@ enum DebugSnapshots {
             try? await Task.sleep(for: .milliseconds(300)); snap(dir, "4-notext")
             vm.status = .idle; vm.showSettings = true
             try? await Task.sleep(for: .milliseconds(300)); snap(dir, "5-settings")
+            if let scroll = NSApp.windows.first(where: { $0 is TextifyPanel })?.contentView?.firstScrollView {
+                scroll.documentView?.scroll(NSPoint(x: 0, y: 10_000))
+                try? await Task.sleep(for: .milliseconds(300)); snap(dir, "6-settings-scrolled")
+            }
             NSApp.terminate(nil)
         }
     }
@@ -56,5 +66,14 @@ enum DebugSnapshots {
         view.cacheDisplay(in: view.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?
             .write(to: URL(fileURLWithPath: dir).appendingPathComponent("\(name).png"))
+    }
+}
+
+private extension NSView {
+    /// First NSScrollView in this view's subtree (used to scroll Settings for a second snapshot).
+    var firstScrollView: NSScrollView? {
+        if let s = self as? NSScrollView { return s }
+        for sub in subviews { if let s = sub.firstScrollView { return s } }
+        return nil
     }
 }

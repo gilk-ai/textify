@@ -21,6 +21,7 @@ Before submitting, please check:
 
 1. `scripts/build-app.sh` builds without warnings from `Sources/`.
 2. Run `--ocr` on the generated test images (English, Hebrew, mixed, multi-paragraph, blank) and check the output reads correctly.
+   For table changes, run `--table` on the `table-*.png` images and open the exported .xlsx (`--xlsx out.xlsx`).
 3. For UI changes, attach before/after screenshots. The snapshot mode in the README renders each state without Screen Recording permission.
 
 ## Code layout

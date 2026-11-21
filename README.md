@@ -51,6 +51,19 @@ Turn on **Settings → Save to file** to also write every extraction to disk. It
 - The status line reads **Copied & saved!**, and the result view gets a Show-in-Finder button. If saving fails, the text is still copied and a warning explains why.
 - Pasting the same image again doesn't create a duplicate file. Re-scan does save again.
 
+### Tables → Excel
+
+When **Save tables as Excel spreadsheets** is on (the default once auto-save is enabled) and the screenshot contains a clearly structured table, TEXTIFY saves an **.xlsx** that reproduces it:
+
+- The same rows and columns, with or without grid lines in the image, and **merged cells** preserved.
+- Numbers are stored as **real numbers** that display exactly as in the image (`1,299.00`, `8.5%`, `85`), so you can sum and sort them. Values that only look numeric, like `0512`, stay text.
+- A text-only first row becomes a **bold, frozen header**.
+- **Hebrew tables** get a right-to-left sheet with the same visual column order as the image. Cell text comes from Tesseract.
+- Each table gets its own sheet. A **Full Text** sheet keeps everything else in the screenshot.
+- In *New file each time* mode, the .xlsx replaces the .txt. In *Append* mode, the text is still appended to the log, with a note pointing to the .xlsx saved next to it.
+
+Detection uses Apple's on-device document analysis (`RecognizeDocumentsRequest`, **macOS 26+**). Images without a real table, like paragraphs, invoices laid out as lines, or recipes, are saved as text as before. The .xlsx is written by TEXTIFY itself, with no Office or third-party libraries required.
+
 Supported formats: PNG, JPEG, HEIC/HEIF, TIFF, BMP and GIF.
 
 ## Hebrew
@@ -95,6 +108,7 @@ build/TEXTIFY.app/Contents/MacOS/Textify --ocr build/test-images/hebrew.png
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard  # same pipeline as ⌘V, headless
 build/TEXTIFY.app/Contents/MacOS/Textify --ocr-clipboard --save-to build/out [--append]  # also test auto-save
 build/TEXTIFY.app/Contents/MacOS/Textify --label build/test-images/invoice.png             # show the file label
+build/TEXTIFY.app/Contents/MacOS/Textify --table build/test-images/table-grid.png --xlsx out.xlsx  # detect + export a table
 TEXTIFY_SNAPSHOT_DIR=/tmp/snaps TEXTIFY_SNAPSHOT_IMAGE=build/test-images/mixed.png \
   build/TEXTIFY.app/Contents/MacOS/Textify               # renders each UI state to PNGs
 ```
@@ -111,6 +125,8 @@ Sources/Textify/
   ClipboardManager.swift    pasteboard image read / text write
   TextFileSaver.swift       opt-in save of extracted text (new file / append)
   FileLabeler.swift         on-device label for saved files (Apple model → heuristic)
+  TableExtractor.swift      table detection (Vision documents, macOS 26+; Hebrew cells via Tesseract)
+  XLSXWriter.swift          dependency-free .xlsx writer (sheets, merges, number formats, RTL)
   ImageLoader.swift         file/data → CGImage, format checks
   TextifyViewModel.swift    state machine (idle → processing → copied / no text / error)
   Views/                    ContentView, ImageDropZone, ExtractedTextView, SettingsView

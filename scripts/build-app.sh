@@ -13,9 +13,13 @@ if [[ -z "${SDKROOT:-}" ]]; then
 fi
 
 echo "→ Compiling (release)…"
-swift build -c release 2>&1 | grep -v "search path .* not found" || true
+# Fail loudly on compile errors (don't silently package a stale binary).
+mkdir -p build
+status=0
+swift build -c release > build/build.log 2>&1 || status=$?
+grep -v "search path .* not found" build/build.log || true
+if [[ $status -ne 0 ]]; then echo "✗ Build failed (see build/build.log)"; exit 1; fi
 BIN="$(swift build -c release --show-bin-path)/Textify"
-[[ -x "$BIN" ]] || { echo "Build failed"; exit 1; }
 
 APP=build/TEXTIFY.app
 rm -rf "$APP"
