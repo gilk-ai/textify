@@ -54,6 +54,14 @@ scripts/setup.sh --hebrew --settings "autoSaveEnabled=1 autoSaveMode=newFile"
 
 Text is copied automatically. The panel also has **Copy**, **Clear** and **Re-scan**. **Esc** clears the result, or hides the panel if it's already empty. **⌘W** hides it and **⌘,** opens Settings.
 
+### Mini player
+
+Press **⌘M** (or the mini-player button in the header, or **Mini Player** in the menus) to shrink TEXTIFY into a slim bar that sits in a bottom corner of the screen, **beside the Dock**, at the Dock's height. It does everything the panel does at a glance: drop a screenshot on it or press ⌘V, and it shows what was copied with a one-line preview, plus small icons when there's a QR code, event, receipt or table.
+
+- **Stick it in a corner:** drag it near either bottom corner (or anywhere into the Dock's row) and let go. It snaps tight into that corner. Dropped elsewhere, it stays where you put it. Right-click → *Stick to Bottom-Left / Bottom-Right Corner* also works.
+- **Expand when needed:** double-click the bar, click ⤢, or press ⌘M. The full panel opens just above the Dock in the same corner. ⌘M (or the header button) shrinks it back.
+- TEXTIFY remembers the mode and corner across launches. It follows the Dock on the bottom, on either side, or hidden.
+
 ### Smart detection
 
 TEXTIFY recognizes three kinds of content and shows a small card above the text for each. Each has its own switch in **Settings → Smart detection**, and all of it runs on your Mac.

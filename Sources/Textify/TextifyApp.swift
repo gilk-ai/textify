@@ -74,6 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let window = NSMenu(title: "Window")
         window.addItem(item("Show TEXTIFY", #selector(showPanel), "0"))
         window.addItem(item("Hide Panel", #selector(hidePanel), "w"))
+        window.addItem(.separator())
+        window.addItem(item("Mini Player", #selector(toggleMini), "m"))
         main.addItem(submenu(window))
         NSApp.windowsMenu = window
         return main
@@ -117,6 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showPanel() { FloatingPanelManager.shared.show() }
     @objc private func hidePanel() { FloatingPanelManager.shared.hide() }
+    @objc private func toggleMini() { FloatingPanelManager.shared.toggleMini() }
 }
 
 /// Whether TEXTIFY shows a Dock icon (default) or runs from the menu bar only.
@@ -165,6 +168,7 @@ final class MenuBarController: NSObject {
         menu.addItem(makeItem("Show TEXTIFY", #selector(showPanel), ""))
         menu.addItem(makeItem("Extract Text from Clipboard", #selector(processClipboard), ""))
         menu.addItem(makeItem("Open Image…", #selector(openImage), ""))
+        menu.addItem(makeItem("Mini Player", #selector(toggleMini), ""))
         menu.addItem(.separator())
         menu.addItem(makeItem("Settings…", #selector(openSettings), ""))
         menu.addItem(.separator())
@@ -194,6 +198,8 @@ final class MenuBarController: NSObject {
         FloatingPanelManager.shared.show()
         TextifyViewModel.shared.showSettings = true
     }
+
+    @objc private func toggleMini() { FloatingPanelManager.shared.toggleMini() }
 
     @objc private func quit() { NSApp.terminate(nil) }
 }

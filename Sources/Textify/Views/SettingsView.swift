@@ -143,6 +143,7 @@ struct SettingsView: View {
                     row("⌘C", "Copy selected text")
                     row("Esc", "Clear result / hide")
                     row("⌘W", "Hide panel")
+                    row("⌘M", "Mini player ↔ full panel")
                 }
             }
         }

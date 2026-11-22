@@ -29,6 +29,25 @@ enum DebugSnapshots {
                 }
                 try? await Task.sleep(for: .milliseconds(300))
                 snap(dir, "3-result")
+                let p = FloatingPanelManager.shared
+                p.enterMini()
+                try? await Task.sleep(for: .milliseconds(500)); snap(dir, "8-mini-result")
+                print("mini frame:", NSStringFromRect(NSApp.windows.first { $0 is TextifyPanel }!.frame),
+                      "screen:", NSStringFromRect(NSScreen.main!.frame), "visible:", NSStringFromRect(NSScreen.main!.visibleFrame))
+                vm.clear()
+                try? await Task.sleep(for: .milliseconds(300)); snap(dir, "9-mini-idle")
+                p.snap(to: .left)
+                try? await Task.sleep(for: .milliseconds(500))
+                print("left frame:", NSStringFromRect(NSApp.windows.first { $0 is TextifyPanel }!.frame))
+                p.expand()
+                try? await Task.sleep(for: .milliseconds(500))
+                print("expanded frame:", NSStringFromRect(NSApp.windows.first { $0 is TextifyPanel }!.frame))
+                snap(dir, "10-expanded")
+                p.enterMini()
+                try? await Task.sleep(for: .milliseconds(500))
+                print("collapsed frame:", NSStringFromRect(NSApp.windows.first { $0 is TextifyPanel }!.frame))
+                p.expand()
+                try? await Task.sleep(for: .milliseconds(400))
             }
             vm.clear(); vm.status = .noText
             try? await Task.sleep(for: .milliseconds(300)); snap(dir, "4-notext")

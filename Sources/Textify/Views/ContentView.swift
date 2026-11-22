@@ -33,7 +33,7 @@ struct ContentView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: Theme.corner, style: .continuous))
         // The whole panel accepts drops, so a new screenshot can replace an existing result.
-        .onDrop(of: [.fileURL, .image], isTargeted: $isTargeted, perform: handleDrop)
+        .onDrop(of: [.fileURL, .image], isTargeted: $isTargeted) { Self.handleDrop($0, vm: vm) }
         .preferredColorScheme(.dark)
     }
 
@@ -50,6 +50,9 @@ struct ContentView: View {
             HeaderButton(symbol: vm.showSettings ? "xmark" : "gearshape", help: "Settings (⌘,)") {
                 vm.showSettings.toggle()
             }
+            HeaderButton(symbol: "pip.enter", help: "Mini player (⌘M) — docks beside the Dock") {
+                FloatingPanelManager.shared.enterMini()
+            }
             HeaderButton(symbol: "minus", help: "Hide (⌘W)") {
                 FloatingPanelManager.shared.hide()
             }
@@ -58,7 +61,8 @@ struct ContentView: View {
         .background(WindowDragArea())
     }
 
-    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+    /// Shared by the full panel and the mini player.
+    static func handleDrop(_ providers: [NSItemProvider], vm: TextifyViewModel) -> Bool {
         guard let provider = providers.first else { return false }
         vm.showSettings = false
         if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
