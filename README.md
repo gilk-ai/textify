@@ -148,7 +148,22 @@ None. The global shortcut uses Carbon `RegisterEventHotKey`, which needs no Acce
 scripts/run-tests.sh        # end-to-end suite: OCR, Hebrew, tables, .xlsx, QR, events, receipts, clipboard
 ```
 
-It skips the Hebrew checks without Tesseract and the table checks before macOS 26. CI runs the same script.
+It skips the Hebrew checks without Tesseract and the table checks before macOS 26. It also runs the event and receipt checks under a US region in UTC (like CI machines), and starts with the local-only policy check:
+
+```bash
+scripts/check-local-only.sh   # fails on networking APIs, telemetry SDKs, package dependencies, text logging,
+                              # unexpected URLs, or new places that open links/files
+```
+
+### GitHub Actions
+
+| Workflow | When | What |
+|---|---|---|
+| **macOS build & test** | every push and PR (not docs-only), weekly, or by hand | A cheap Linux job runs the local-only policy and ShellCheck first. Only if those pass does it build and run the full suite on macOS 14 and the newest macOS, with Tesseract on the newest. Results appear in the run summary. The newest-macOS job also uploads **TEXTIFY.app** (zipped) and **UI snapshots** of each panel state as artifacts. |
+| **Release** | pushing a tag like `v1.1.0` | Builds the app with that version, runs the suite against it, and publishes a GitHub Release with `TEXTIFY-1.1.0.zip`, its SHA-256 checksum, install notes and auto-generated release notes. |
+| **Dependabot** | weekly | One grouped PR updating the Actions the workflows use. |
+
+The release app is ad-hoc signed, not notarized, so the first launch needs right-click → Open. macOS runner minutes count 10× toward the free GitHub Actions allowance for private repos. That's why docs-only changes skip CI and the Linux policy job gates the macOS jobs.
 
 Individual helpers:
 

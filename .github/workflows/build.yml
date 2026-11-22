@@ -3,7 +3,12 @@ name: macOS build & test
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**', '.vscode/**', 'LICENSE']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**', '.vscode/**', 'LICENSE']
+  schedule:
+    # Weekly, to catch breakage from new macOS / Xcode runner images before users do.
+    - cron: '0 6 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -14,8 +19,21 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Cheap Linux job first: the macOS jobs (which cost 10× the minutes) only run if it passes.
+  policy:
+    name: Local-only policy & script lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Local-only policy (no networking, telemetry or text logging)
+        run: scripts/check-local-only.sh
+      - name: ShellCheck
+        run: shellcheck -S warning scripts/*.sh
+
   build-and-test:
     name: ${{ matrix.os }}
+    needs: policy
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -33,7 +51,19 @@ jobs:
         run: swift build -c release
 
       - name: Run end-to-end tests
-        run: scripts/run-tests.sh "$(swift build -c release --show-bin-path)/Textify"
+        run: |
+          set -o pipefail
+          scripts/run-tests.sh "$(swift build -c release --show-bin-path)/Textify" | tee build/test-results.txt
+
+      - name: Test summary
+        if: always()
+        run: |
+          {
+            echo "### Tests on ${{ matrix.os }} ($(sw_vers -productVersion))"
+            echo '```'
+            cat build/test-results.txt 2>/dev/null || echo "(no results)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test diagnostics
         if: failure()
@@ -42,7 +72,46 @@ jobs:
           name: test-diagnostics-${{ matrix.os }}
           path: |
             build/test-images/
+            build/test-results.txt
             build/test.xlsx
             build/test.ics
           if-no-files-found: ignore
           retention-days: 7
+
+      # --- Newest macOS only: the downloadable app and screenshots of every panel state. ---
+
+      - name: Build TEXTIFY.app
+        if: matrix.os == 'macos-latest'
+        run: |
+          scripts/build-app.sh
+          ditto -c -k --keepParent build/TEXTIFY.app build/TEXTIFY.zip
+
+      - name: Render UI snapshots
+        if: matrix.os == 'macos-latest'
+        continue-on-error: true
+        run: |
+          mkdir -p build/snapshots "$RUNNER_TEMP/textify-save"
+          defaults write com.textify.app miniMode -bool false
+          TEXTIFY_SNAPSHOT_DIR="$PWD/build/snapshots" TEXTIFY_SNAPSHOT_IMAGE="$PWD/build/test-images/invoice.png" \
+            TEXTIFY_SAVE_DIR="$RUNNER_TEMP/textify-save" build/TEXTIFY.app/Contents/MacOS/Textify &
+          pid=$!
+          for _ in $(seq 1 90); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+          kill "$pid" 2>/dev/null || true
+          ls build/snapshots
+
+      - name: Upload app
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TEXTIFY-app-${{ github.sha }}
+          path: build/TEXTIFY.zip
+          retention-days: 14
+
+      - name: Upload UI snapshots
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-snapshots-${{ github.sha }}
+          path: build/snapshots/
+          if-no-files-found: ignore
+          retention-days: 14

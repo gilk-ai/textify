@@ -1,0 +1,61 @@
+name: Release
+
+# Push a version tag to publish a release:   git tag v1.1.0 && git push origin v1.1.0
+# Builds TEXTIFY.app with that version, runs the full test suite, and attaches the zipped app and its
+# SHA-256 checksum to a GitHub Release with notes generated from the commits since the last release.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history, for release notes
+
+      - name: Local-only policy
+        run: scripts/check-local-only.sh
+
+      - name: Install Tesseract for Hebrew OCR tests
+        run: brew install tesseract tesseract-lang
+
+      - name: Build TEXTIFY.app
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          VERSION="$VERSION" scripts/build-app.sh
+
+      - name: Run end-to-end tests on the built app
+        run: scripts/run-tests.sh build/TEXTIFY.app/Contents/MacOS/Textify
+
+      - name: Package
+        run: |
+          ZIP="TEXTIFY-$VERSION.zip"
+          ditto -c -k --keepParent build/TEXTIFY.app "build/$ZIP"
+          (cd build && shasum -a 256 "$ZIP" > "$ZIP.sha256")
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > build/notes.md <<'EOF'
+          ### Install
+          1. Download `TEXTIFY-*.zip`, unzip, and move **TEXTIFY.app** to Applications.
+          2. The app is ad-hoc signed (not notarized), so the first time: right-click → **Open** → **Open**.
+          3. Optional, for Hebrew: `brew install tesseract tesseract-lang`.
+
+          Everything runs on your Mac: no account, no network, no telemetry. Building from source:
+          `scripts/setup.sh`.
+          EOF
+          gh release create "$GITHUB_REF_NAME" "build/$ZIP" "build/$ZIP.sha256" \
+            --title "TEXTIFY $VERSION" --notes-file build/notes.md --generate-notes --verify-tag

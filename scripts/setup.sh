@@ -7,7 +7,7 @@
 #   scripts/setup.sh --settings "autoSaveEnabled=1 autoSaveMode=newFile"
 #   scripts/setup.sh --check               only check prerequisites; change nothing
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 HEBREW=0; CHECK_ONLY=0; SETTINGS=""; PROFILE=""
 while [[ $# -gt 0 ]]; do

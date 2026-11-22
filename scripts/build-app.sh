@@ -27,6 +27,11 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Textify"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# Release builds stamp the version from the git tag (VERSION=1.2.0 scripts/build-app.sh).
+if [[ -n "${VERSION:-}" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
+fi
 
 echo "→ Generating icon…"
 ICONSET=build/AppIcon.iconset

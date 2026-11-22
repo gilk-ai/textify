@@ -2,7 +2,7 @@
 # End-to-end tests for TEXTIFY's OCR, table and clipboard pipeline (headless, never saves files).
 # Usage: scripts/run-tests.sh [path/to/Textify-binary]   (default: build/TEXTIFY.app)
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 B="${1:-build/TEXTIFY.app/Contents/MacOS/Textify}"
 [[ -x "$B" ]] || { echo "Binary not found: $B (run scripts/build-app.sh first)"; exit 1; }
@@ -10,11 +10,19 @@ IMG=build/test-images
 swift scripts/make-test-images.swift "$IMG" >/dev/null 2>&1
 
 pass=0; fail=0; skip=0
-check() { if eval "$2" >/dev/null 2>&1; then pass=$((pass+1)); echo "  ✓ $1"; else fail=$((fail+1)); echo "  ✗ $1"; fi; }
+# On failure, show what the command printed (test images are synthetic, so this never exposes real content).
+check() {
+  local out
+  if out=$(eval "$2" 2>&1); then pass=$((pass+1)); echo "  ✓ $1"
+  else fail=$((fail+1)); echo "  ✗ $1"; echo "      \$ $2"; [[ -n "$out" ]] && echo "$out" | tail -5 | sed 's/^/      | /'; fi
+}
 skipped() { skip=$((skip+1)); echo "  – $1 (skipped: $2)"; }
 
 HAS_HEBREW=0; [[ -f "$(brew --prefix 2>/dev/null)/share/tessdata/heb.traineddata" ]] && HAS_HEBREW=1
 HAS_TABLES=0; [[ $(sw_vers -productVersion | cut -d. -f1) -ge 26 ]] && HAS_TABLES=1
+
+echo "Policy"
+check "local-only policy (no networking, telemetry or text logging)" 'scripts/check-local-only.sh'
 
 echo "OCR"
 check "English text"            '$B --ocr $IMG/english.png | grep -q "quick brown fox"'
@@ -60,6 +68,14 @@ TEXTIFY_SAVE_DIR=$LEDGER $B --detect $IMG/receipt.png --log >/dev/null
 check "ledger skips duplicates"  'TEXTIFY_SAVE_DIR=$LEDGER $B --detect $IMG/receipt.png --log | grep -q "Already in" && [[ $(wc -l < $LEDGER/Expenses.csv) -eq 2 ]]'
 rm -rf "$LEDGER"
 check "valid .ics"               '$B --detect $IMG/event.png --ics build/test.ics && grep -q "^DTSTART:.*Z" build/test.ics && grep -q "END:VCALENDAR" build/test.ics'
+
+echo "Region independence (US region + UTC, like CI runners)"
+# shellcheck disable=SC2034  # used inside the eval'd check strings
+US=(-AppleLocale en_US -AppleLanguages "(en-US)")
+check "English event, US region"  'TZ=UTC $B --detect $IMG/event.png "${US[@]}" | grep -q "^Event:"'
+check "Hebrew event read day-first, US region" 'TZ=UTC $B --detect $IMG/event-hebrew.png "${US[@]}" | grep -q "Event: פגישת צוות"'
+check "Hebrew receipt date day-first, US region" 'TZ=UTC $B --detect $IMG/receipt-hebrew.png "${US[@]}" | grep -q "Nov 5, 2026"'
+check "Hebrew event, Pacific time"  'TZ=America/Los_Angeles $B --detect $IMG/event-hebrew.png | grep -q "Event: פגישת צוות"'
 
 echo "Clipboard"
 setclip() { osascript -e "set the clipboard to (read (POSIX file \"$PWD/$1\") as «class PNGf»)"; }
