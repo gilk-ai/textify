@@ -31,12 +31,13 @@ hits=$(grep -nE '\.package\(' Package.swift || true)
 [[ -z "$hits" ]] && ok "no package dependencies" || flag "Package.swift declares dependencies" "$hits"
 
 # 4. No system logging (it would persist text in the unified log). Console output only in the CLI/debug tools,
-#    plus OCRService's TEXTIFY_DEBUG line, which prints counts only.
+#    plus the TEXTIFY_DEBUG lines in OCRService (counts) and EventDetector (lengths, dates, decisions) — never text.
 hits=$(find_in 'NSLog\(|os_log|\bLogger\(|^import os(\.log)?$')
 [[ -z "$hits" ]] && ok "no system logging" || flag "system logging found" "$hits"
 hits=$(grep -rnE '(^|[^A-Za-z_.])(print|debugPrint|dump|fputs)\(' Sources \
        | grep -vE '^Sources/Textify/(CommandLineTools|DebugSnapshots)\.swift:' \
-       | grep -vE '^Sources/Textify/OCRService\.swift:[0-9]+: *fputs\("\[debug\] obs=' || true)
+       | grep -vE '^Sources/Textify/OCRService\.swift:[0-9]+: *fputs\("\[debug\] obs=' \
+       | grep -vE '^Sources/Textify/EventDetector\.swift:[0-9]+: *if debugging \{ fputs\("\[debug\] event: ' || true)
 [[ -z "$hits" ]] && ok "console output only in CLI/debug tools" || flag "console output outside CLI/debug tools" "$hits"
 
 # 5. URL literals: only identifiers that are never fetched — the .xlsx format's XML namespaces and

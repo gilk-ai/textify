@@ -44,6 +44,15 @@ enum EventDetector {
     }
 
     /// Date/time matches that are in the future and include a time. At most three.
+    /// TEXTIFY_DEBUG=1: explains each date match on stderr — lengths, dates and decisions only, never text.
+    private static let debugging = ProcessInfo.processInfo.environment["TEXTIFY_DEBUG"] != nil
+    private static func debug(_ facts: @autoclosure () -> String) {
+        if debugging { fputs("[debug] event: \(facts())\n", stderr) }
+    }
+    private static let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter(); f.timeZone = .current; return f
+    }()
+
     static func candidates(in text: String, now: Date = Date()) -> [DetectedEvent] {
         guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue) else { return [] }
         let location = address(in: text)
@@ -55,19 +64,22 @@ enum EventDetector {
                 // A bare time next to a date the detector didn't see (e.g. "19:30" after "2.12.2026") isn't "today".
                 if let hd = hebrewDate, NSIntersectionRange(hd.range, match.range).length == 0 { continue }
                 var matched = ns.substring(with: match.range)
-                guard let detected = match.date else { continue }
+                guard let detected = match.date else { debug("match len=\(match.range.length) has no date"); continue }
+                let hasTime = timePattern.firstMatch(in: matched, range: NSRange(location: 0, length: (matched as NSString).length)) != nil
+                debug("match at \(match.range.location) len=\(match.range.length) of \(ns.length), date=\(iso.string(from: detected)), hasTime=\(hasTime), timeZone=\(match.timeZone?.identifier ?? "-")")
                 var start = DateOrder.dayFirst(detected, matched: matched, context: line)
-                if timePattern.firstMatch(in: matched, range: NSRange(location: 0, length: (matched as NSString).length)) == nil {
+                if !hasTime {
                     // The detector sometimes stops at the date ("2.12.2026") and leaves the time that
                     // follows ("בשעה 19:30", "at 15:00") — depends on the Mac's language. Pick it up.
                     guard let (time, text) = timeFollowing(match.range, in: line),
                           let combined = Calendar.current.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: start)
-                    else { continue }
+                    else { debug("→ skipped: no time in or after the match"); continue }
                     start = combined
                     matched += text
                 }
-                guard start > now.addingTimeInterval(-3600) else { continue }
-                guard !events.contains(where: { $0.start == start }) else { continue }
+                guard start > now.addingTimeInterval(-3600) else { debug("→ skipped: \(iso.string(from: start)) is in the past (now \(iso.string(from: now)))"); continue }
+                guard !events.contains(where: { $0.start == start }) else { debug("→ skipped: duplicate"); continue }
+                debug("→ event at \(iso.string(from: start))")
                 let end = start.addingTimeInterval(match.duration > 0 ? match.duration : 3600)
                 events.append(DetectedEvent(title: fallbackTitle(line: line, matched: matched),
                                             start: start, end: end, location: location, sourceLine: line))

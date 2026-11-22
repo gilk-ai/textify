@@ -19,6 +19,8 @@ check() {
     # Also show what OCR read from the test image involved, to tell OCR problems from parsing problems.
     local img; img=$(grep -oE '[a-z-]+\.png' <<< "$2" | head -1)
     [[ -n "$img" && -f "$IMG/$img" ]] && "$B" --ocr "$IMG/$img" 2>/dev/null | head -6 | sed 's/^/      ocr> /'
+    # And the app's own reasoning (TEXTIFY_DEBUG prints decisions, never text).
+    (export TEXTIFY_DEBUG=1; eval "$2") 2>&1 | grep -F '[debug] event' | head -8 | sed 's/^/      /'
   fi
 }
 skipped() { skip=$((skip+1)); echo "  – $1 (skipped: $2)"; }
