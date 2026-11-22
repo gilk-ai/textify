@@ -14,7 +14,12 @@ pass=0; fail=0; skip=0
 check() {
   local out
   if out=$(eval "$2" 2>&1); then pass=$((pass+1)); echo "  ✓ $1"
-  else fail=$((fail+1)); echo "  ✗ $1"; echo "      \$ $2"; [[ -n "$out" ]] && echo "$out" | tail -5 | sed 's/^/      | /'; fi
+  else
+    fail=$((fail+1)); echo "  ✗ $1"; echo "      \$ $2"; [[ -n "$out" ]] && echo "$out" | tail -5 | sed 's/^/      | /'
+    # Also show what OCR read from the test image involved, to tell OCR problems from parsing problems.
+    local img; img=$(grep -oE '[a-z-]+\.png' <<< "$2" | head -1)
+    [[ -n "$img" && -f "$IMG/$img" ]] && "$B" --ocr "$IMG/$img" 2>/dev/null | head -6 | sed 's/^/      ocr> /'
+  fi
 }
 skipped() { skip=$((skip+1)); echo "  – $1 (skipped: $2)"; }
 

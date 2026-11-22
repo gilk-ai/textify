@@ -39,7 +39,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-latest]
+        # Oldest and newest macOS that GitHub still offers (macos-14 runners are retired).
+        os: [macos-15, macos-latest]
     steps:
       - uses: actions/checkout@v4
 

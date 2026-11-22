@@ -159,7 +159,7 @@ scripts/check-local-only.sh   # fails on networking APIs, telemetry SDKs, packag
 
 | Workflow | When | What |
 |---|---|---|
-| **macOS build & test** | every push and PR (not docs-only), weekly, or by hand | A cheap Linux job runs the local-only policy and ShellCheck first. Only if those pass does it build and run the full suite on macOS 14 and the newest macOS, with Tesseract on the newest. Results appear in the run summary. The newest-macOS job also uploads **TEXTIFY.app** (zipped) and **UI snapshots** of each panel state as artifacts. |
+| **macOS build & test** | every push and PR (not docs-only), weekly, or by hand | A cheap Linux job runs the local-only policy and ShellCheck first. Only if those pass does it build and run the full suite on macOS 15 (the oldest GitHub still offers) and the newest macOS, with Tesseract on the newest. Results appear in the run summary. The newest-macOS job also uploads **TEXTIFY.app** (zipped) and **UI snapshots** of each panel state as artifacts. |
 | **Release** | pushing a tag like `v1.1.0` | Builds the app with that version, runs the suite against it, and publishes a GitHub Release with `TEXTIFY-1.1.0.zip`, its SHA-256 checksum, install notes and auto-generated release notes. |
 | **Dependabot** | weekly | One grouped PR updating the Actions the workflows use. |
 
