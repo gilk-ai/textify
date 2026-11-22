@@ -23,7 +23,7 @@ open build/TEXTIFY.app
 scripts/build-app.sh --install  # builds and copies to /Applications
 ```
 
-TEXTIFY has a Dock icon and a menu-bar item (viewfinder icon). Clicking either one brings up the panel. If you prefer menu-bar only, turn off **Settings → Show in Dock**. Quit with ⌘Q, or from either menu.
+TEXTIFY has a Dock icon and a menu-bar item (viewfinder icon). Clicking either one brings up the panel. Keep both, or turn one off in **Settings → General** (**Show in Dock** / **Show in menu bar**); at least one always stays on. Quit with ⌘Q, or from either menu.
 
 For development: `swift build` (see the SDK note below), then `.build/debug/Textify`.
 

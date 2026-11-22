@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var saveMode = TextFileSaver.mode
     @State private var saveTables = TableExtractor.isEnabled
     @State private var showInDock = DockPresence.showInDock
+    @State private var showInMenuBar = DockPresence.showInMenuBar
     @State private var qrCopy = BarcodeDetector.copyCodeContent
     @State private var detectEvents = EventDetector.isEnabled
     @State private var logReceipts = ExpenseLedger.isEnabled
@@ -48,6 +49,12 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                     .tint(Theme.accent)
                     .onChange(of: showInDock) { _, on in DockPresence.showInDock = on }
+                    .disabled(showInDock && !showInMenuBar)
+                Toggle("Show in menu bar", isOn: $showInMenuBar)
+                    .toggleStyle(.switch)
+                    .tint(Theme.accent)
+                    .onChange(of: showInMenuBar) { _, on in DockPresence.showInMenuBar = on }
+                    .disabled(showInMenuBar && !showInDock)
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .toggleStyle(.switch)
                     .tint(Theme.accent)

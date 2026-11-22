@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = makeMainMenu()
-        menuBar = MenuBarController()
+        menuBar = MenuBarController.shared
 
         HotKeyManager.shared.onTrigger = {
             Task { @MainActor in
@@ -126,8 +126,15 @@ enum DockPresence {
 
     static var showInDock: Bool {
         get { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: key); apply() }
+        set { UserDefaults.standard.set(newValue, forKey: key); apply(); MenuBarController.shared.applyVisibility() }
     }
+
+    /// Whether the menu-bar item is shown (default). At least one of Dock / menu bar stays on.
+    static var showInMenuBar: Bool {
+        get { UserDefaults.standard.object(forKey: menuBarKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: menuBarKey); MenuBarController.shared.applyVisibility() }
+    }
+    private static let menuBarKey = "showInMenuBar"
 
     static func apply() {
         NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
@@ -139,10 +146,17 @@ enum DockPresence {
 /// Menu-bar status item.
 @MainActor
 final class MenuBarController: NSObject {
+    static let shared = MenuBarController()
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
-    override init() {
+    /// Shows the item unless "Show in menu bar" is off — and never hides it while the Dock icon is off too.
+    func applyVisibility() {
+        item.isVisible = DockPresence.showInMenuBar || !DockPresence.showInDock
+    }
+
+    private override init() {
         super.init()
+        defer { applyVisibility() }
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "text.viewfinder", accessibilityDescription: "TEXTIFY")
             button.image?.isTemplate = true
