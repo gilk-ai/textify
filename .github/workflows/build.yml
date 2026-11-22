@@ -44,6 +44,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Use the newest Xcode on the runner
+        # One binary for all supported macOS versions is built with the newest SDK; on older macOS the
+        # newer features are skipped at runtime (#available). This tests exactly that.
+        run: |
+          xcode=$(printf '%s\n' /Applications/Xcode_*.app | sort -V | tail -1)
+          if [[ -d "$xcode" ]]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version | head -1
+          xcrun --show-sdk-version
+
       - name: Install Tesseract for Hebrew OCR
         if: matrix.os == 'macos-latest'
         run: brew install tesseract tesseract-lang
@@ -54,6 +63,7 @@ jobs:
       - name: Run end-to-end tests
         run: |
           set -o pipefail
+          mkdir -p build
           scripts/run-tests.sh "$(swift build -c release --show-bin-path)/Textify" | tee build/test-results.txt
 
       - name: Test summary
