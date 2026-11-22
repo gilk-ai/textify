@@ -27,6 +27,16 @@ TEXTIFY has a Dock icon and a menu-bar item (viewfinder icon). Clicking either o
 
 For development: `swift build` (see the SDK note below), then `.build/debug/Textify`.
 
+### Install on another Mac
+
+Clone the repo, then run one command. It checks the Mac (macOS 14+, Command Line Tools), builds, installs to `/Applications`, runs the tests and launches TEXTIFY:
+
+```bash
+scripts/setup.sh --hebrew --settings "autoSaveEnabled=1 autoSaveMode=newFile"
+```
+
+`--hebrew` installs Tesseract through Homebrew (skipped with a note if Homebrew isn't available). `--settings` applies TEXTIFY settings (`autoSaveEnabled`, `autoSaveMode`, `globalHotKey`, `detectEvents`, `qrCopyContent`, `logReceipts`, `saveTablesAsExcel`, `showInDock`, `showInMenuBar`, `hebrewOCREnabled`). `scripts/setup.sh --check` only checks prerequisites.
+
 ## Using it
 
 | Input | How |

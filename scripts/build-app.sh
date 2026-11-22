@@ -7,8 +7,9 @@ cd "$(dirname "$0")/.."
 # so prefer the newest SDK that builds without Xcode. Override with SDKROOT=... if needed.
 if [[ -z "${SDKROOT:-}" ]]; then
   CLT=/Library/Developer/CommandLineTools/SDKs
-  if [[ -d "$CLT/MacOSX26.sdk" ]] && ! xcode-select -p | grep -q Xcode.app; then
-    export SDKROOT="$CLT/MacOSX26.sdk"
+  SDK26=$(ls -d "$CLT"/MacOSX26*.sdk 2>/dev/null | sort -V | tail -1)
+  if [[ -n "$SDK26" ]] && ! xcode-select -p | grep -q Xcode.app; then
+    export SDKROOT="$SDK26"
   fi
 fi
 
