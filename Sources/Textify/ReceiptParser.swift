@@ -98,8 +98,10 @@ enum ReceiptParser {
     private static func findDate(_ text: String, now: Date) -> Date? {
         guard let d = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.date.rawValue) else { return nil }
         let latest = now.addingTimeInterval(86_400)
-        return d.matches(in: text, range: NSRange(text.startIndex..., in: text))
-            .compactMap(\.date).first { $0 <= latest }
+        let ns = text as NSString
+        return d.matches(in: text, range: NSRange(location: 0, length: ns.length))
+            .compactMap { m in m.date.map { DateOrder.dayFirst($0, matched: ns.substring(with: m.range), context: text) } }
+            .first { $0 <= latest }
     }
 
     /// The vendor is normally the first real line at the top of the receipt.

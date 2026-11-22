@@ -50,19 +50,59 @@ enum EventDetector {
         var events: [DetectedEvent] = []
         for line in text.components(separatedBy: "\n") where !line.isEmpty {
             let ns = line as NSString
+            let hebrewDate = DateOrder.hebrewDate(in: line)
             for match in detector.matches(in: line, range: NSRange(location: 0, length: ns.length)) {
-                guard let start = match.date, start > now.addingTimeInterval(-3600) else { continue }
-                let matched = ns.substring(with: match.range)
-                guard timePattern.firstMatch(in: matched, range: NSRange(location: 0, length: (matched as NSString).length)) != nil
-                else { continue }
+                // A bare time next to a date the detector didn't see (e.g. "19:30" after "2.12.2026") isn't "today".
+                if let hd = hebrewDate, NSIntersectionRange(hd.range, match.range).length == 0 { continue }
+                var matched = ns.substring(with: match.range)
+                guard let detected = match.date else { continue }
+                var start = DateOrder.dayFirst(detected, matched: matched, context: line)
+                if timePattern.firstMatch(in: matched, range: NSRange(location: 0, length: (matched as NSString).length)) == nil {
+                    // The detector sometimes stops at the date ("2.12.2026") and leaves the time that
+                    // follows ("בשעה 19:30", "at 15:00") — depends on the Mac's language. Pick it up.
+                    guard let (time, text) = timeFollowing(match.range, in: line),
+                          let combined = Calendar.current.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: start)
+                    else { continue }
+                    start = combined
+                    matched += text
+                }
+                guard start > now.addingTimeInterval(-3600) else { continue }
                 guard !events.contains(where: { $0.start == start }) else { continue }
                 let end = start.addingTimeInterval(match.duration > 0 ? match.duration : 3600)
                 events.append(DetectedEvent(title: fallbackTitle(line: line, matched: matched),
                                             start: start, end: end, location: location, sourceLine: line))
                 if events.count == 3 { return events }
             }
+            // Fallback for Hebrew numeric dates the detector didn't recognize ("ב-2.12.2026 בשעה 19:30").
+            if let (day, range) = hebrewDate, let (time, timeText) = timeFollowing(range, in: line),
+               let start = Calendar.current.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: day),
+               start > now.addingTimeInterval(-3600), !events.contains(where: { $0.start == start }) {
+                let matched = (line as NSString).substring(with: range) + timeText
+                events.append(DetectedEvent(title: fallbackTitle(line: line, matched: matched), start: start,
+                                            end: start.addingTimeInterval(3600), location: location, sourceLine: line))
+                if events.count == 3 { return events }
+            }
         }
         return events
+    }
+
+    private static let followingTime = try! NSRegularExpression(
+        pattern: #"^\s*(?:at|@|ב-?שעה|בשעה|,)?\s*(\d{1,2})[:.](\d{2})\s*(am|pm|a\.m\.|p\.m\.)?"#, options: [.caseInsensitive])
+
+    /// A clock time right after a date (within the same line), e.g. " בשעה 19:30" or " at 3:00 PM".
+    static func timeFollowing(_ range: NSRange, in line: String) -> ((hour: Int, minute: Int), String)? {
+        let ns = line as NSString
+        let rest = ns.substring(from: range.location + range.length)
+        let r = rest as NSString
+        guard let m = followingTime.firstMatch(in: rest, range: NSRange(location: 0, length: r.length)),
+              var hour = Int(r.substring(with: m.range(at: 1))), let minute = Int(r.substring(with: m.range(at: 2))),
+              (0...59).contains(minute) else { return nil }
+        if m.range(at: 3).location != NSNotFound {
+            let pm = r.substring(with: m.range(at: 3)).lowercased().hasPrefix("p")
+            if pm && hour < 12 { hour += 12 } else if !pm && hour == 12 { hour = 0 }
+        }
+        guard (0...23).contains(hour) else { return nil }
+        return ((hour, minute), r.substring(with: m.range))
     }
 
     private static func address(in text: String) -> String? {
