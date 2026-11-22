@@ -3,21 +3,28 @@
 #
 #   scripts/setup.sh                       build + install + test (English OCR)
 #   scripts/setup.sh --hebrew              also install Tesseract for Hebrew (needs Homebrew)
+#   scripts/setup.sh --profile product-manager
 #   scripts/setup.sh --settings "autoSaveEnabled=1 autoSaveMode=newFile"
 #   scripts/setup.sh --check               only check prerequisites; change nothing
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-HEBREW=0; CHECK_ONLY=0; SETTINGS=""
+HEBREW=0; CHECK_ONLY=0; SETTINGS=""; PROFILE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --hebrew) HEBREW=1 ;;
     --check) CHECK_ONLY=1 ;;
+    --profile) PROFILE="${2:-}"; shift ;;
     --settings) SETTINGS="${2:-}"; shift ;;
     *) echo "Unknown option: $1"; exit 2 ;;
   esac
   shift
 done
+
+[[ -z "$PROFILE" || "$PROFILE" == "product-manager" ]] || {
+  echo "Unknown profile: $PROFILE (available: product-manager)"
+  exit 2
+}
 
 ok()   { echo "  ✓ $*"; }
 warn() { echo "  ! $*"; }
@@ -66,24 +73,38 @@ fi
 echo "Building and installing"
 scripts/build-app.sh --install || die "Build failed (see build/build.log)."
 
+apply_setting() {
+  local pair="$1" key value b
+  key="${pair%%=*}"; value="${pair#*=}"
+  case "$key" in
+    autoSaveEnabled|detectEvents|qrCopyContent|logReceipts|saveTablesAsExcel|showInDock|showInMenuBar|hebrewOCREnabled)
+      [[ "$value" =~ ^(1|0|true|false|YES|NO)$ ]] || die "$key needs 1 or 0"
+      [[ "$value" =~ ^(1|true|YES)$ ]] && b=true || b=false
+      defaults write com.textify.app "$key" -bool "$b" || die "could not set $key" ;;
+    autoSaveMode)
+      [[ "$value" =~ ^(newFile|append)$ ]] || die "autoSaveMode is newFile or append"
+      defaults write com.textify.app "$key" -string "$value" || die "could not set $key" ;;
+    globalHotKey)
+      [[ "$value" =~ ^(cmdShiftV|ctrlOptCmdV|ctrlShiftT|disabled)$ ]] || die "unknown globalHotKey: $value"
+      defaults write com.textify.app "$key" -string "$value" || die "could not set $key" ;;
+    *) die "Not a TEXTIFY setting: $key" ;;
+  esac
+  ok "$key = $value"
+}
+
+if [[ "$PROFILE" == "product-manager" ]]; then
+  echo "Applying product-manager profile"
+  for pair in \
+    autoSaveEnabled=1 autoSaveMode=append saveTablesAsExcel=1 detectEvents=1 \
+    qrCopyContent=0 logReceipts=0 globalHotKey=ctrlOptCmdV showInDock=1 showInMenuBar=1; do
+    apply_setting "$pair"
+  done
+fi
+
 if [[ -n "$SETTINGS" ]]; then
-  echo "Applying settings"
+  echo "Applying custom settings"
   for pair in $SETTINGS; do
-    key="${pair%%=*}"; value="${pair#*=}"
-    case "$key" in
-      autoSaveEnabled|detectEvents|qrCopyContent|logReceipts|saveTablesAsExcel|showInDock|showInMenuBar|hebrewOCREnabled)
-        [[ "$value" =~ ^(1|0|true|false|YES|NO)$ ]] || die "$key needs 1 or 0"
-        [[ "$value" =~ ^(1|true|YES)$ ]] && b=true || b=false
-        defaults write com.textify.app "$key" -bool "$b" || die "could not set $key" ;;
-      autoSaveMode)
-        [[ "$value" =~ ^(newFile|append)$ ]] || die "autoSaveMode is newFile or append"
-        defaults write com.textify.app "$key" -string "$value" || die "could not set $key" ;;
-      globalHotKey)
-        [[ "$value" =~ ^(cmdShiftV|ctrlOptCmdV|ctrlShiftT|disabled)$ ]] || die "unknown globalHotKey: $value"
-        defaults write com.textify.app "$key" -string "$value" || die "could not set $key" ;;
-      *) die "Not a TEXTIFY setting: $key" ;;
-    esac
-    ok "$key = $value"
+    apply_setting "$pair"
   done
 fi
 

@@ -26,6 +26,19 @@ struct SettingsView: View {
 
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 14) {
+            section("Product workflow") {
+                Button(action: applyProductManagerWorkflow) {
+                    Label("Apply PM research setup", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.accent)
+                Text("Appends research and feedback to a local log, exports detected tables, and suggests events. Saving is on-device; screenshots may contain sensitive customer data.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             section("Global shortcut") {
                 Picker("", selection: $hotKey) {
                     ForEach(HotKeyOption.allCases) { Text($0.label).tag($0) }
@@ -151,6 +164,31 @@ struct SettingsView: View {
         .foregroundStyle(Theme.text)
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func applyProductManagerWorkflow() {
+        autoSave = true
+        TextFileSaver.isEnabled = true
+        saveMode = .append
+        TextFileSaver.mode = .append
+        saveTables = true
+        TableExtractor.isEnabled = true
+
+        detectEvents = true
+        EventDetector.isEnabled = true
+        qrCopy = false
+        BarcodeDetector.copyCodeContent = false
+        logReceipts = false
+        ExpenseLedger.isEnabled = false
+
+        showInDock = true
+        DockPresence.showInDock = true
+        showInMenuBar = true
+        DockPresence.showInMenuBar = true
+
+        hotKey = .ctrlOptCmdV
+        HotKeyOption.current = .ctrlOptCmdV
+        hotKeyFailed = !HotKeyManager.shared.register(.ctrlOptCmdV)
     }
 
     private func section<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {

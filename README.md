@@ -37,6 +37,8 @@ scripts/setup.sh --hebrew --settings "autoSaveEnabled=1 autoSaveMode=newFile"
 
 `--hebrew` installs Tesseract through Homebrew (skipped with a note if Homebrew isn't available). `--settings` applies TEXTIFY settings (`autoSaveEnabled`, `autoSaveMode`, `globalHotKey`, `detectEvents`, `qrCopyContent`, `logReceipts`, `saveTablesAsExcel`, `showInDock`, `showInMenuBar`, `hebrewOCREnabled`). `scripts/setup.sh --check` only checks prerequisites.
 
+For a product-research workflow, use `scripts/setup.sh --profile product-manager`. It enables a local append-only research log and table exports, suggests calendar events, uses a less-conflicting shortcut, and leaves QR copying and receipt logging off. Custom `--settings` are applied afterward and override the profile. Saving persists extracted content locally in `~/Documents/TEXTIFY`; check screenshots for sensitive customer data before enabling this profile.
+
 ## Using it
 
 | Input | How |
@@ -84,6 +86,12 @@ Turn on **Settings → Save to file** to also write every extraction to disk. It
 - The default folder is `~/Documents/TEXTIFY`. Use **Choose…** to pick another one. The first save into Documents triggers a one-time macOS permission prompt.
 - The status line reads **Copied & saved!**, and the result view gets a Show-in-Finder button. If saving fails, the text is still copied and a warning explains why.
 - Pasting the same image again doesn't create a duplicate file. Re-scan does save again.
+
+### Product research workflow
+
+In **Settings → Product workflow**, **Apply PM research setup** configures TEXTIFY for collecting feedback, research notes, and dashboard data: it enables local append-mode saving and table export, turns on event suggestions, and chooses a global shortcut that doesn't replace Paste and Match Style. QR auto-copy and automatic receipt logging stay off. You can adjust any setting afterward.
+
+This is an opt-in convenience, not a cloud AI feature: extracted content is saved on your Mac in `~/Documents/TEXTIFY`. Treat screenshots as customer data and only save them where your organization's policy allows.
 
 ### Tables → Excel
 
