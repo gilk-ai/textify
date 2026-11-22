@@ -86,9 +86,13 @@ echo "Region independence (US region + UTC, like CI runners)"
 # shellcheck disable=SC2034  # used inside the eval'd check strings
 US=(-AppleLocale en_US -AppleLanguages "(en-US)")
 check "English event, US region"  'TZ=UTC $B --detect $IMG/event.png "${US[@]}" | grep -q "Event: "'
-check "Hebrew event read day-first, US region" 'TZ=UTC $B --detect $IMG/event-hebrew.png "${US[@]}" | grep -q "Event: פגישת צוות"'
-check "Hebrew receipt date day-first, US region" 'TZ=UTC $B --detect $IMG/receipt-hebrew.png "${US[@]}" | grep -q "Nov 5, 2026"'
-check "Hebrew event, Pacific time"  'TZ=America/Los_Angeles $B --detect $IMG/event-hebrew.png | grep -q "Event: פגישת צוות"'
+if (( HAS_HEBREW )); then
+  check "Hebrew event read day-first, US region" 'TZ=UTC $B --detect $IMG/event-hebrew.png "${US[@]}" | grep -q "Event: פגישת צוות"'
+  check "Hebrew receipt date day-first, US region" 'TZ=UTC $B --detect $IMG/receipt-hebrew.png "${US[@]}" | grep -q "Nov 5, 2026"'
+  check "Hebrew event, Pacific time"  'TZ=America/Los_Angeles $B --detect $IMG/event-hebrew.png | grep -q "Event: פגישת צוות"'
+else
+  skipped "Hebrew dates across regions" "Tesseract + heb model not installed"
+fi
 
 echo "Clipboard"
 setclip() { osascript -e "set the clipboard to (read (POSIX file \"$PWD/$1\") as «class PNGf»)"; }
