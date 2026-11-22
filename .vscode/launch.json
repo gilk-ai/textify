@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:textify}",
+            "name": "Debug Textify",
+            "target": "Textify",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug Textify"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:textify}",
+            "name": "Release Textify",
+            "target": "Textify",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release Textify"
+        }
+    ]
+}

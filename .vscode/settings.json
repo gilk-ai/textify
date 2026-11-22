@@ -1,0 +1,19 @@
+{
+  "editor.rulers": [100],
+  "files.encoding": "utf8",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "files.exclude": {
+    "**/.build": true,
+    "**/build": true,
+    "**/.DS_Store": true
+  },
+  "search.exclude": {
+    "**/.build": true,
+    "**/build": true
+  },
+  "[swift]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  }
+}

@@ -1,17 +1,48 @@
-name: Build & test
+name: macOS build & test
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
-    runs-on: macos-latest
+  build-and-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-latest]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Tesseract for Hebrew OCR
+        if: matrix.os == 'macos-latest'
+        run: brew install tesseract tesseract-lang
+
       - name: Build
         run: swift build -c release
-      - name: Test
-        # Hebrew checks skip without Tesseract; table checks skip before macOS 26.
+
+      - name: Run end-to-end tests
         run: scripts/run-tests.sh "$(swift build -c release --show-bin-path)/Textify"
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-diagnostics-${{ matrix.os }}
+          path: |
+            build/test-images/
+            build/test.xlsx
+            build/test.ics
+          if-no-files-found: ignore
+          retention-days: 7
