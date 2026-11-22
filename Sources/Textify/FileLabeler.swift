@@ -36,7 +36,11 @@ enum FileLabeler {
     static func askModel(instructions: String, prompt: String) async -> String? {
         #if canImport(FoundationModels)
         guard #available(macOS 26, *) else { return nil }
-        guard case .available = SystemLanguageModel.default.availability else { return nil }
+        let availability = SystemLanguageModel.default.availability
+        if ProcessInfo.processInfo.environment["TEXTIFY_DEBUG"] != nil {
+            fputs("[debug] event: model availability = \(availability)\n", stderr)
+        }
+        guard case .available = availability else { return nil }
         return await withTaskGroup(of: String?.self) { group in
             group.addTask {
                 let session = LanguageModelSession(instructions: instructions)

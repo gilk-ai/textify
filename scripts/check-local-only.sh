@@ -37,7 +37,8 @@ hits=$(find_in 'NSLog\(|os_log|\bLogger\(|^import os(\.log)?$')
 hits=$(grep -rnE '(^|[^A-Za-z_.])(print|debugPrint|dump|fputs)\(' Sources \
        | grep -vE '^Sources/Textify/(CommandLineTools|DebugSnapshots)\.swift:' \
        | grep -vE '^Sources/Textify/OCRService\.swift:[0-9]+: *fputs\("\[debug\] obs=' \
-       | grep -vE '^Sources/Textify/EventDetector\.swift:[0-9]+: *if debugging \{ fputs\("\[debug\] event: ' || true)
+       | grep -vE '^Sources/Textify/EventDetector\.swift:[0-9]+: *if debugging \{ fputs\("\[debug\] event: ' \
+       | grep -vE '^Sources/Textify/FileLabeler\.swift:[0-9]+: *fputs\("\[debug\] event: model availability = ' || true)
 [[ -z "$hits" ]] && ok "console output only in CLI/debug tools" || flag "console output outside CLI/debug tools" "$hits"
 
 # 5. URL literals: only identifiers that are never fetched — the .xlsx format's XML namespaces and

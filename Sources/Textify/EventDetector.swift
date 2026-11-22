@@ -37,7 +37,9 @@ enum EventDetector {
         let candidates = candidates(in: text, now: now)
         var events: [DetectedEvent] = []
         for var event in candidates {
+            debug("naming event at \(iso.string(from: event.start))…")
             event.title = await title(for: event, fullText: text)
+            debug("named (\(event.title.count) chars)")
             events.append(event)
         }
         return events
