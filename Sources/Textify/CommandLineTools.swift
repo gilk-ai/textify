@@ -12,6 +12,9 @@ import ServiceManagement
 enum CommandLineTools {
     static func runIfRequested() -> Bool {
         let args = CommandLine.arguments
+        // Line-buffered output: results reach the pipe as they're printed, even if a framework's
+        // background work (e.g. a timed-out on-device model request) makes the process exit abnormally.
+        setvbuf(stdout, nil, _IOLBF, 0)
         if let i = args.firstIndex(of: "--ocr"), i + 1 < args.count {
             do {
                 let image = try ImageLoader.load(url: URL(fileURLWithPath: args[i + 1]))
