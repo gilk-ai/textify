@@ -36,6 +36,8 @@ echo "Policy"
 check "local-only policy (no networking, telemetry or text logging)" 'scripts/check-local-only.sh'
 
 echo "OCR"
+# Note: on CI's virtual Macs, Apple's ML runtime prints warnings to stdout without a line break,
+# so result lines may not start at column 0. Match "Event: " / "Receipt: " anywhere in a line.
 check "English text"            '$B --ocr $IMG/english.png | grep -q "quick brown fox"'
 check "paragraph gaps kept"     '[[ $($B --ocr $IMG/multi-paragraph.png | grep -c "^$") -eq 2 ]]'
 check "blank image → no text"   '! $B --ocr $IMG/blank.png'
@@ -64,11 +66,11 @@ fi
 echo "Smart detection"
 check "QR link decoded"          '$B --detect $IMG/qr-link.png | grep -q "copy: https://example.com/textify?ref=poster"'
 check "Wi-Fi QR → password"      '$B --detect $IMG/qr-wifi.png | grep -q "copy: latte;2026"'
-check "English event found"      '$B --detect $IMG/event.png | grep -q "^Event:"'
+check "English event found"      '$B --detect $IMG/event.png | grep -q "Event: "'
 check "receipt total + VAT"      '$B --detect $IMG/receipt.png | grep -q "Receipt: BLUE BOTTLE COFFEE | \$10.60 · VAT \$0.85"'
-check "receipt isn't an event"   '! $B --detect $IMG/receipt.png | grep -q "^Event:"'
+check "receipt isn't an event"   '! $B --detect $IMG/receipt.png | grep -q "Event: "'
 for f in table-grid recipe mixed event english; do
-  check "no false receipt: $f"   "! \$B --detect \$IMG/$f.png | grep -q '^Receipt:'"
+  check "no false receipt: $f"   "! \$B --detect \$IMG/$f.png | grep -q 'Receipt: '"
 done
 if (( HAS_HEBREW )); then
   check "Hebrew event"           '$B --detect $IMG/event-hebrew.png | grep -q "Event: פגישת צוות"'
@@ -83,7 +85,7 @@ check "valid .ics"               '$B --detect $IMG/event.png --ics build/test.ic
 echo "Region independence (US region + UTC, like CI runners)"
 # shellcheck disable=SC2034  # used inside the eval'd check strings
 US=(-AppleLocale en_US -AppleLanguages "(en-US)")
-check "English event, US region"  'TZ=UTC $B --detect $IMG/event.png "${US[@]}" | grep -q "^Event:"'
+check "English event, US region"  'TZ=UTC $B --detect $IMG/event.png "${US[@]}" | grep -q "Event: "'
 check "Hebrew event read day-first, US region" 'TZ=UTC $B --detect $IMG/event-hebrew.png "${US[@]}" | grep -q "Event: פגישת צוות"'
 check "Hebrew receipt date day-first, US region" 'TZ=UTC $B --detect $IMG/receipt-hebrew.png "${US[@]}" | grep -q "Nov 5, 2026"'
 check "Hebrew event, Pacific time"  'TZ=America/Los_Angeles $B --detect $IMG/event-hebrew.png | grep -q "Event: פגישת צוות"'
