@@ -74,7 +74,9 @@ enum HebrewOCRService {
             let word = stripBidiMarks(String(c[11])).trimmingCharacters(in: .whitespaces)
             guard !word.isEmpty else { continue }
             // Pixel coords (origin top-left) → Vision normalized coords (origin bottom-left).
-            let box = CGRect(x: l / width, y: 1 - (t + h) / height, width: w / width, height: h / height)
+            // (Explicit CGFloat: older Swift compilers find mixed Double/CGFloat arithmetic ambiguous.)
+            let (x, y, bw, bh) = (CGFloat(l), CGFloat(t), CGFloat(w), CGFloat(h))
+            let box = CGRect(x: x / width, y: 1 - (y + bh) / height, width: bw / width, height: bh / height)
             out.append((Fragment(text: word, box: box), "\(c[2])-\(c[3])-\(c[4])"))
         }
         return out
